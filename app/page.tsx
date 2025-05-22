@@ -1,103 +1,112 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
+import { useRouter } from "next/navigation";
+
+export default function LoginPage() {
+  const [message, setMessage] = useState("");
+  const router = useRouter();
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const user = sessionData.session?.user;
+
+      if (user) {
+        router.push("/home"); // 🔁 Already logged in, go to home
+      } else {
+        setCheckingSession(false); // Show login form
+      }
+    };
+
+    checkSession();
+  }, [router]);
+
+  const handleOAuthLogin = async (provider: "google" | "apple") => {
+    await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: "http://localhost:3000/insert-user",
+      },
+    });
+  };
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+    <div className="flex w-screen overflow-hidden relative min-h-[calc(100vh-64px)] mt-16 items-center justify-center bg-[#141414]">
+      <div className="back_noise"></div>
+      <div className="shape shape-1"></div>
+      <div className="shape shape-2"></div>
+      <div className="bg-white p-8 z-4 rounded shadow-md w-full max-w-md space-y-4">
+        <h1 className="text-2xl font-semibold mb-1 text-neutral-800">Log in</h1>
+        <p className="text-sm mb-6 text-neutral-500">
+          Continue to your account
+        </p>
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="email" className="block text-sm text-gray-800">
+              Email
+            </label>
+            <input
+              type="email"
+              id="email"
+              required
+              className="mt-1 block w-full px-3 py-2 border border-[#303030] rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+          </div>
+          <div>
+            <button
+              className="w-full cursor-pointer bg-[#303030] border border-gray-500 outline outline-[#303030] outline-[0.3px] text-white px-4 py-2 rounded-md shadow-sm hover:bg-neutral-900 focus:outline-none"
+            >
+              Continue with email
+            </button>
+            <a
+              href="#"
+              className="w-full cursor-pointer mt-2 px-4 flex gap-2 justify-center text-sm py-[10px] rounded-md bg-neutral-100 hover:bg-neutral-200 focus:outline-none"
+            >
+              <span>
+                <img src="key.svg" alt="" />
+              </span>
+              Sign in with passkey
+            </a>
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+        <div className="mt-3">
+          <p className="text-center flex justify-center items-center gap-3 font-light text-xm text-neutral-500">
+            <span className="h-[1px] bg-neutral-200 w-[35%]"></span>
+            or
+            <span className="h-[1px] bg-neutral-200 w-[35%]"></span>
+          </p>
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <button
+              onClick={() => handleOAuthLogin("google")}
+              className="flex cursor-pointer items-center justify-center w-full bg-neutral-100 text-white p-4 rounded-md hover:bg-neutral-200"
+            >
+              <img src="/google.svg" alt="Google" className="h-5 w-5 mr-2" />
+            </button>
+            <button
+              onClick={() => handleOAuthLogin("apple")}
+              className="flex cursor-pointer items-center justify-center w-full bg-neutral-100 text-white p-4 rounded-md hover:bg-neutral-200"
+            >
+              <img src="/apple.svg" alt="Apple" className="h-5 w-5 mr-2" />
+            </button>
+          </div>
+        </div>
+        <p className="my-8 text-xs font-light">
+          New User
+          <a
+            href="#"
+            className="ml-2 text-blue-500 hover:underline"
+          >
+            Get started →
+          </a>
+        </p>
+
+        {message && (
+          <p className="text-center text-sm text-gray-600">{message}</p>
+        )}
+      </div>
     </div>
   );
 }
