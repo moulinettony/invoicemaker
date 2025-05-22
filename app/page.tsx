@@ -28,7 +28,7 @@ export default function LoginPage() {
     await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: "http://localhost:3000/insert-user",
+        redirectTo: "/insert-user",
       },
     });
   };
@@ -92,7 +92,7 @@ export default function LoginPage() {
             </button>
           </div>
         </div>
-        
+
         <p className="my-8 text-xs font-light">
           New User
           <a
