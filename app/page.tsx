@@ -66,7 +66,6 @@ export default function LoginPage() {
               className="w-full cursor-pointer mt-2 px-4 flex gap-2 justify-center text-sm py-[10px] rounded-md bg-neutral-100 hover:bg-neutral-200 focus:outline-none"
             >
               <span>
-                <img src="key.svg" alt="" />
               </span>
               Sign in with passkey
             </a>
@@ -93,6 +92,7 @@ export default function LoginPage() {
             </button>
           </div>
         </div>
+        
         <p className="my-8 text-xs font-light">
           New User
           <a
