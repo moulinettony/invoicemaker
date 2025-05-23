@@ -82,13 +82,13 @@ export default function LoginPage() {
               onClick={() => handleOAuthLogin("google")}
               className="flex cursor-pointer items-center justify-center w-full bg-neutral-100 text-white p-4 rounded-md hover:bg-neutral-200"
             >
-              <img src="google.svg" alt="Google" className="h-5 w-5 mr-2" />
+              <img src="https://dbzxjogjhqzxtebpvhre.supabase.co/storage/v1/object/public/images//google.svg" alt="Google" className="h-5 w-5 mr-2" />
             </button>
             <button
               onClick={() => handleOAuthLogin("apple")}
               className="flex cursor-pointer items-center justify-center w-full bg-neutral-100 text-white p-4 rounded-md hover:bg-neutral-200"
             >
-              <img src="apple.svg" alt="Apple" className="h-5 w-5 mr-2" />
+              <img src="https://dbzxjogjhqzxtebpvhre.supabase.co/storage/v1/object/public/images//apple.svg" alt="Apple" className="h-5 w-5 mr-2" />
             </button>
           </div>
         </div>
@@ -102,7 +102,7 @@ export default function LoginPage() {
             Get started →
           </a>
         </p>
-        
+
 
         {message && (
           <p className="text-center text-sm text-gray-600">{message}</p>
