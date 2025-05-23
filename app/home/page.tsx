@@ -13,6 +13,8 @@ type UserInfo = {
 export default function Home() {
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [businessInfo, setBusinessInfo] = useState<any[]>([]);
+  const [clientsInfo, setClientsInfo] = useState<any[]>([]);
+  const [invoicesInfo, setInvoicesInfo] = useState<any[]>([]);
   const [showModal, setShowModal] = useState(false);
 
   const fetchData = async () => {
@@ -34,6 +36,24 @@ export default function Home() {
         .eq("user_id", user.id);
 
       setBusinessInfo(businessData || []);
+
+      if (businessData && businessData.length > 0) {
+        const businessIds = businessData.map((b) => b.id);
+
+        const { data: clientsData } = await supabase
+          .from("client")
+          .select("*")
+          .in("business_id", businessIds);
+
+        setClientsInfo(clientsData || []);
+
+        const { data: invoicesData } = await supabase
+          .from("invoice")
+          .select("*")
+          .in("business_id", businessIds);
+
+        setInvoicesInfo(invoicesData || []);
+      }
     }
   };
 
@@ -51,13 +71,13 @@ export default function Home() {
             <User className="absolute right-4 top-4 h-8 w-8 text-neutral-700 p-2 rounded bg-neutral-100" />
             <p className="text-neutral-600 text-sm">Invoices</p>
             <p className="text-black text-lg font-bold my-2">
-              {businessInfo.length}
+              {invoicesInfo.length}
             </p>
             <p className="text-neutral-600 text-sm">
-              {businessInfo.length > 0 ? (
+              {invoicesInfo.length > 0 ? (
                 <span className="">
                   {new Date(
-                    [...businessInfo].sort(
+                    [...invoicesInfo].sort(
                       (a, b) =>
                         new Date(b.created_at).getTime() -
                         new Date(a.created_at).getTime()
@@ -77,13 +97,13 @@ export default function Home() {
             <ReceiptText className="absolute right-4 top-4 h-8 w-8 text-neutral-700 p-2 rounded bg-neutral-100" />
             <p className="text-neutral-600 text-sm">Clients</p>
             <p className="text-black text-lg font-bold my-2">
-              {businessInfo.length}
+              {clientsInfo.length}
             </p>
             <p className="text-neutral-600 text-sm">
-              {businessInfo.length > 0 ? (
+              {clientsInfo.length > 0 ? (
                 <span className="">
                   {new Date(
-                    [...businessInfo].sort(
+                    [...clientsInfo].sort(
                       (a, b) =>
                         new Date(b.created_at).getTime() -
                         new Date(a.created_at).getTime()
