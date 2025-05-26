@@ -13,41 +13,121 @@ import {
 } from "@react-pdf/renderer";
 
 const InvoicePdf = ({ invoice }: { invoice: any }) => {
-  const styles = StyleSheet.create({
-    page: { padding: 30 },
-    section: { marginBottom: 10 },
-    header: { fontSize: 20, marginBottom: 10 },
-    line: { fontSize: 12, marginBottom: 4 },
-  });
+ const styles = StyleSheet.create({
+  page: {
+    padding: 40,
+    fontSize: 12,
+    fontFamily: 'Helvetica',
+    lineHeight: 1.5,
+  },
+  header: {
+    fontSize: 18,
+    marginBottom: 10,
+    textAlign: 'center',
+    textTransform: 'uppercase',
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  section: {
+    marginBottom: 10,
+  },
+  bold: {
+    fontWeight: 'bold',
+  },
+  line: {
+    marginBottom: 4,
+  },
+  tableHeader: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#000',
+    marginBottom: 6,
+  },
+  tableRow: {
+    flexDirection: 'row',
+    marginBottom: 4,
+  },
+  cellLarge: {
+    width: '60%',
+  },
+  cellSmall: {
+    width: '40%',
+    textAlign: 'right',
+  },
+  bankDetails: {
+    marginTop: 20,
+    fontSize: 10,
+  },
+  rightAlign: {
+    alignItems: 'flex-end',
+  },
+  amountWords: {
+    marginTop: 10,
+    fontStyle: 'italic',
+  }
+});
 
   return (
     <Document>
-      <Page size="A4" style={styles.page}>
-        <Text style={styles.header}>Invoice: {invoice.title}</Text>
-        <View style={styles.section}>
-          <Text style={styles.line}>
-            Date: {new Date(invoice.created_at).toLocaleDateString()}
-          </Text>
-          <Text style={styles.line}>Client: {invoice.client.name}</Text>
-          <Text style={styles.line}>Email: {invoice.client.email || "-"}</Text>
-          <Text style={styles.line}>
-            Address: {invoice.client.address || "-"}
-          </Text>
+    <Page size="A4" style={styles.page}>
+      <View style={styles.row}>
+        <View  style={styles.rightAlign}>
+          <Text style={styles.line}>Facture Nº {invoice.count + 1}</Text>
+          <Text style={styles.line}>Date : {new Date(invoice.created_at).toLocaleDateString('fr-FR')}</Text>
         </View>
-        <Text style={styles.header}>Products</Text>
-        {invoice.product.map((prod: any, idx: number) => (
-          <Text key={idx} style={styles.line}>
-            • {prod.name} — {prod.price} MAD (+{prod.tax}% tax)
-          </Text>
-        ))}
-        <View style={styles.section}>
-          <Text style={styles.line}>
-            Subtotal: {invoice.subtotal.toFixed(2)} MAD
-          </Text>
-          <Text style={styles.line}>Total: {invoice.total.toFixed(2)} MAD</Text>
+        <View>
+          <Text style={styles.line}>Ytech</Text>
+          <Text style={styles.line}>Rue Dakar, Immeuble N°5, appartement n°1</Text>
+          <Text style={styles.line}>Océan, Rabat</Text>
+          <Text style={styles.line}>ICE : 003525145000007</Text>
         </View>
-      </Page>
-    </Document>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.bold}>Facture pour :</Text>
+        <Text style={styles.line}>Nom : {invoice.client.name}</Text>
+        <Text style={styles.line}>Email : {invoice.client.email || '-'}</Text>
+        <Text style={styles.line}>Adresse : {invoice.client.address || '-'}</Text>
+      </View>
+
+      <Text style={styles.bold}>Détails des prestations :</Text>
+      <View style={styles.tableHeader}>
+        <Text style={styles.cellLarge}>Description</Text>
+        <Text style={styles.cellSmall}>Total (MAD)</Text>
+      </View>
+      {invoice.product.map((prod:any, idx:any) => (
+        <View style={styles.tableRow} key={idx}>
+          <Text style={styles.cellLarge}>• {prod.name} — {prod.description || ''}</Text>
+          <Text style={styles.cellSmall}>{prod.price.toFixed(2)}</Text>
+        </View>
+      ))}
+
+      <View style={styles.section}>
+        <Text style={styles.line}>Sous-total : {invoice.subtotal.toFixed(2)} MAD</Text>
+        <Text style={styles.line}>TVA ({invoice.tax || 0}%): {(invoice.tax ? (invoice.subtotal * invoice.tax / 100).toFixed(2) : '0.00')} MAD</Text>
+        {invoice.discount && (
+          <Text style={styles.line}>Remise : {invoice.discount}%</Text>
+        )}
+        <Text style={styles.line}>Total TTC : {invoice.total.toFixed(2)} MAD</Text>
+      </View>
+
+      <Text style={styles.amountWords}>Montant en toutes lettres : {invoice.amount_in_words || '-'} TTC</Text>
+
+      <View style={styles.bankDetails}>
+        <Text style={styles.bold}>Coordonnées bancaires :</Text>
+        <Text>Libellé du compte : WEBDEV26</Text>
+        <Text>Devise : Dirham Marocain - MAD</Text>
+        <Text>RIB : 050 810 026 01092748 420 01 74</Text>
+        <Text>IBAN : MA64050 810 026 01092748 420 01 74</Text>
+        <Text>Code BIC : CAFGMAMCXXX</Text>
+      </View>
+
+      <Text style={{ marginTop: 20, textAlign: 'right' }}>Merci pour votre confiance.</Text>
+      <Text style={{ textAlign: 'right' }}>Signature</Text>
+    </Page>
+  </Document>
   );
 };
 
