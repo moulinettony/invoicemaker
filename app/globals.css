@@ -1,0 +1,193 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.back_noise {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  z-index: 1;
+  height: 100%;
+  background-image: url(/noise.png);
+  background-size: 100px;
+}
+
+.shape {
+  mix-blend-mode: lighten;
+  -webkit-animation-duration: 20s;
+  animation-duration: 20s;
+  filter: blur(250px);
+  position: absolute;
+  border-radius: 100%;
+  -webkit-animation-iteration-count: infinite;
+  animation-iteration-count: infinite;
+  -webkit-animation-timing-function: cubic-bezier(0.1, 0, 0.9, 1);
+  animation-timing-function: cubic-bezier(0.1, 0, 0.9, 1);
+}
+
+.shape-1 {
+    bottom: 0;
+    left: 0;
+    width: 700px;
+    height: 700px;
+    background: #58c174;
+    mix-blend-mode: lighten;
+    -webkit-transform: translate(-30%, 40%);
+    transform: translate(-30%, 40%);
+    -webkit-animation-name: gradientShapeAnimation1;
+    animation-name: gradientShapeAnimation1;
+}
+
+.shape-2 {
+  top: 0;
+  right: 0;
+  width: 600px;
+  height: 600px;
+  background: #407fc7;
+  -webkit-transform: translate(20%, -40%);
+  transform: translate(20%, -40%);
+  -webkit-animation-name: gradientShapeAnimation2;
+  animation-name: gradientShapeAnimation2;
+}
+
+@-webkit-keyframes gradientShapeAnimation1 {
+  0% {
+      -webkit-transform: translate(-30%, 40%) rotate(-20deg);
+      transform: translate(-30%, 40%) rotate(-20deg)
+  }
+
+  25% {
+      -webkit-transform: translate(0%, 20%) skew(-15deg, -15deg) rotate(80deg);
+      transform: translate(0%, 20%) skew(-15deg, -15deg) rotate(80deg)
+  }
+
+  50% {
+      -webkit-transform: translate(30%, -10%) rotate(180deg);
+      transform: translate(30%, -10%) rotate(180deg)
+  }
+
+  75% {
+      -webkit-transform: translate(-30%, 40%) skew(15deg, 15deg) rotate(240deg);
+      transform: translate(-30%, 40%) skew(15deg, 15deg) rotate(240deg)
+  }
+
+  100% {
+      -webkit-transform: translate(-30%, 40%) rotate(-20deg);
+      transform: translate(-30%, 40%) rotate(-20deg)
+  }
+}
+
+@keyframes gradientShapeAnimation1 {
+  0% {
+      -webkit-transform: translate(-30%, 40%) rotate(-20deg);
+      transform: translate(-30%, 40%) rotate(-20deg)
+  }
+
+  25% {
+      -webkit-transform: translate(0%, 20%) skew(-15deg, -15deg) rotate(80deg);
+      transform: translate(0%, 20%) skew(-15deg, -15deg) rotate(80deg)
+  }
+
+  50% {
+      -webkit-transform: translate(30%, -10%) rotate(180deg);
+      transform: translate(30%, -10%) rotate(180deg)
+  }
+
+  75% {
+      -webkit-transform: translate(-30%, 40%) skew(15deg, 15deg) rotate(240deg);
+      transform: translate(-30%, 40%) skew(15deg, 15deg) rotate(240deg)
+  }
+
+  100% {
+      -webkit-transform: translate(-30%, 40%) rotate(-20deg);
+      transform: translate(-30%, 40%) rotate(-20deg)
+  }
+}
+
+@-webkit-keyframes gradientShapeAnimation2 {
+  0% {
+      -webkit-transform: translate(20%, -40%) rotate(-20deg);
+      transform: translate(20%, -40%) rotate(-20deg)
+  }
+
+  20% {
+      -webkit-transform: translate(0%, 0%) skew(-15deg, -15deg) rotate(80deg);
+      transform: translate(0%, 0%) skew(-15deg, -15deg) rotate(80deg)
+  }
+
+  40% {
+      -webkit-transform: translate(-40%, 50%) rotate(180deg);
+      transform: translate(-40%, 50%) rotate(180deg)
+  }
+
+  60% {
+      -webkit-transform: translate(-20%, -20%) skew(15deg, 15deg) rotate(80deg);
+      transform: translate(-20%, -20%) skew(15deg, 15deg) rotate(80deg)
+  }
+
+  80% {
+      -webkit-transform: translate(10%, -30%) rotate(180deg);
+      transform: translate(10%, -30%) rotate(180deg)
+  }
+
+  100% {
+      -webkit-transform: translate(20%, -40%) rotate(340deg);
+      transform: translate(20%, -40%) rotate(340deg)
+  }
+}
+
+@keyframes gradientShapeAnimation2 {
+  0% {
+      -webkit-transform: translate(20%, -40%) rotate(-20deg);
+      transform: translate(20%, -40%) rotate(-20deg)
+  }
+
+  20% {
+      -webkit-transform: translate(0%, 0%) skew(-15deg, -15deg) rotate(80deg);
+      transform: translate(0%, 0%) skew(-15deg, -15deg) rotate(80deg)
+  }
+
+  40% {
+      -webkit-transform: translate(-40%, 50%) rotate(180deg);
+      transform: translate(-40%, 50%) rotate(180deg)
+  }
+
+  60% {
+      -webkit-transform: translate(-20%, -20%) skew(15deg, 15deg) rotate(80deg);
+      transform: translate(-20%, -20%) skew(15deg, 15deg) rotate(80deg)
+  }
+
+  80% {
+      -webkit-transform: translate(10%, -30%) rotate(180deg);
+      transform: translate(10%, -30%) rotate(180deg)
+  }
+
+  100% {
+      -webkit-transform: translate(20%, -40%) rotate(340deg);
+      transform: translate(20%, -40%) rotate(340deg)
+  }
+}
