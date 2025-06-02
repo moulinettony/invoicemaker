@@ -14,13 +14,14 @@ import {
 } from "@react-pdf/renderer";
 import { formatAmountInWords } from "@/utils/n2words";
 
+// ... (InvoicePdf component remains the same)
 const InvoicePdf = ({ invoice }: { invoice: any }) => {
   const amountInWords = formatAmountInWords(invoice.total);
   const totalTax = invoice.product.reduce((sum: number, prod: any) => {
     const price = Number(prod.price || 0);
     const tax   = Number(prod.tax   || 0);   // percentage (e.g. 20)
     return sum + (price * tax) / 100;
-  }, 0).toFixed(2); 
+  }, 0).toFixed(2);
   const styles = StyleSheet.create({
     page: {
       fontSize: 12,
@@ -323,6 +324,7 @@ const InvoicePdf = ({ invoice }: { invoice: any }) => {
   );
 };
 
+
 export default function InvoicesPage() {
   const [showModal, setShowModal] = useState(false);
   const [businesses, setBusinesses] = useState<any[]>([]);
@@ -334,6 +336,7 @@ export default function InvoicesPage() {
   const [title, setTitle] = useState("");
   const [paid, setPaid] = useState(false);
   const [invoices, setInvoices] = useState<any[]>([]);
+  const [isLoadingInvoices, setIsLoadingInvoices] = useState(true); // Added loading state for invoices
 
   const subtotal = selectedProducts.reduce(
     (sum, product) => sum + Number(product.price || 0),
@@ -348,17 +351,28 @@ export default function InvoicesPage() {
   const fetchBusinessData = async () => {
     const { data: sessionData } = await supabase.auth.getSession();
     const user = sessionData.session?.user;
-    if (!user) return;
+    if (!user) return []; // Return empty array or handle appropriately
 
-    const { data: businessData } = await supabase
+    const { data: businessData, error } = await supabase
       .from("business")
-      .select("*")
+      .select("id, business_name") // Fetch only necessary fields
       .eq("user_id", user.id);
 
+    if (error) {
+      console.error("Error fetching businesses:", error);
+      setBusinesses([]);
+      return [];
+    }
     setBusinesses(businessData || []);
+    return businessData || []; // Return the fetched businesses
   };
 
   const fetchClientsAndProducts = async (businessId: string) => {
+    if (!businessId) {
+        setClients([]);
+        setProducts([]);
+        return;
+    }
     const { data: clientsData } = await supabase
       .from("client")
       .select("*")
@@ -371,78 +385,143 @@ export default function InvoicesPage() {
     setProducts(productsData || []);
   };
 
-  const fetchInvoices = async () => {
-    const { data } = await supabase.from("invoice").select("*");
-    setInvoices(data || []);
+  // MODIFIED fetchInvoices function
+  const fetchUserInvoices = async () => {
+    setIsLoadingInvoices(true);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const user = sessionData.session?.user;
+
+    if (!user) {
+      setInvoices([]);
+      setIsLoadingInvoices(false);
+      return;
+    }
+
+    // 1. Get the user's business IDs
+    const { data: userBusinesses, error: businessError } = await supabase
+      .from("business")
+      .select("id") // Only need the IDs
+      .eq("user_id", user.id);
+
+    if (businessError) {
+      console.error("Error fetching user businesses:", businessError.message);
+      setInvoices([]);
+      setIsLoadingInvoices(false);
+      return;
+    }
+
+    if (!userBusinesses || userBusinesses.length === 0) {
+      // User has no businesses, so no invoices to show
+      setInvoices([]);
+      setIsLoadingInvoices(false);
+      return;
+    }
+
+    const businessIds = userBusinesses.map((b) => b.id);
+
+    // 2. Fetch invoices belonging to those businesses
+    const { data: invoiceData, error: invoiceError } = await supabase
+      .from("invoice")
+      .select("*") // You might want to select specific columns if 'client' is a joined object
+      .in("business_id", businessIds)
+      .order('created_at', { ascending: false }); // Optional: order by most recent
+
+    if (invoiceError) {
+      console.error("Error fetching invoices:", invoiceError.message);
+      setInvoices([]);
+    } else {
+      setInvoices(invoiceData || []);
+    }
+    setIsLoadingInvoices(false);
   };
 
+  // This useEffect fetches businesses for the dropdown AND invoices for the current user
   useEffect(() => {
-    fetchInvoices();
+    fetchBusinessData(); // For the dropdown
+    fetchUserInvoices(); // For the table
   }, []);
 
-  useEffect(() => {
-    fetchBusinessData();
-  }, []);
-
+  // This useEffect remains for fetching clients/products when a business is selected in the modal
   useEffect(() => {
     if (selectedBusiness) {
       fetchClientsAndProducts(selectedBusiness);
+    } else {
+        // Clear clients and products if no business is selected
+        setClients([]);
+        setProducts([]);
     }
   }, [selectedBusiness]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!selectedBusiness || !selectedClient || selectedProducts.length === 0) {
+        alert("Please select a business, client, and at least one product.");
+        return;
+    }
+
     const invoiceData = {
       title,
-      client: selectedClient,
-      product: selectedProducts,
+      client: selectedClient, // Storing the whole client object
+      product: selectedProducts, // Storing array of product objects
       subtotal,
       total,
       paid,
       business_id: selectedBusiness,
       product_count: selectedProducts.length,
-      created_at: new Date().toISOString(),
+      // created_at is set by default by Supabase if column has default value NOW()
+      // If not, keep: created_at: new Date().toISOString(),
     };
 
-    const { error } = await supabase.from("invoice").insert(invoiceData);
+    const { data: insertedInvoice, error } = await supabase
+      .from("invoice")
+      .insert(invoiceData)
+      .select() // To get the inserted row back, especially if you need its ID or created_at
+      .single(); // Assuming you insert one invoice at a time
 
-    if (!error) {
+
+    if (!error && insertedInvoice) {
       setTitle("");
       setSelectedClient(null);
       setSelectedProducts([]);
       setPaid(false);
       setShowModal(false);
-      fetchInvoices();
+      // setSelectedBusiness(""); // Optionally reset selected business for next invoice
+      fetchUserInvoices(); // Refresh the invoice list
 
-      // 🆕 Fetch full business info
+      // 🆕 Fetch full business info for PDF generation
       const { data: business } = await supabase
         .from("business")
         .select("*")
         .eq("id", selectedBusiness)
         .single();
 
-      const fullInvoice = {
-        ...invoiceData,
+      // Ensure client data is properly structured for the PDF
+      // The 'client' in invoiceData is already the selectedClient object
+      const fullInvoiceForPdf = {
+        ...insertedInvoice, // Use the actual inserted invoice data
         business_name: business?.business_name,
         business_address: business?.business_address,
         city: business?.city,
         business_email: business?.business_email,
         business_ice: business?.business_ice,
+        // 'client' object is already part of insertedInvoice
+        // 'product' array is already part of insertedInvoice
       };
 
-      const blob = await pdf(<InvoicePdf invoice={fullInvoice} />).toBlob();
+      const blob = await pdf(<InvoicePdf invoice={fullInvoiceForPdf} />).toBlob();
       const url = URL.createObjectURL(blob);
       window.open(url);
     } else {
-      console.error(error.message);
+      console.error("Error inserting invoice:", error?.message);
+      alert(`Error saving invoice: ${error?.message}`);
     }
   };
 
   return (
     <div className="space-y-4 p-3 mt-16 h-[calc(100vh-64px)]">
       <div className="bg-white p-6 rounded h-full overflow-auto">
-        <div className="grid grid-cols-4 gap-4 mt-4">
+        <div className="grid grid-cols-4 gap-4 mt-4"> {/* This grid seems to be just for the button */}
           <div className="relative border border-neutral-300 border-dashed rounded-xl p-4">
             <Plus className="absolute right-4 top-4 h-8 w-8 text-neutral-700 p-2 rounded bg-neutral-100" />
             <h2 className="text-sm font-semibold">Add New Invoice</h2>
@@ -480,7 +559,7 @@ export default function InvoicesPage() {
                   ))}
                 </select>
 
-                {clients.length > 0 && (
+                {selectedBusiness && clients.length > 0 && (
                   <select
                     value={selectedClient?.id ?? ""}
                     onChange={(e) => {
@@ -500,6 +579,10 @@ export default function InvoicesPage() {
                     ))}
                   </select>
                 )}
+                 {selectedBusiness && clients.length === 0 && (
+                    <p className="text-sm text-gray-500">No clients found for the selected business. Please add clients first.</p>
+                )}
+
                 <div className="w-full">
                   <label className="block text-sm ml-1 mb-1 font-semibold">Invoice Title*:</label>
                   <input
@@ -515,37 +598,44 @@ export default function InvoicesPage() {
                   <label className="block mb-2 text-sm font-semibold">
                     Select Product(s):
                   </label>
-                  <div className="space-y-2 max-h-40 overflow-y-auto">
-                    {products.map((product) => (
-                      <div key={product.id} className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={selectedProducts.includes(product)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedProducts([
-                                ...selectedProducts,
-                                product,
-                              ]);
-                            } else {
-                              setSelectedProducts(
-                                selectedProducts.filter(
-                                  (p) => p.id !== product.id
-                                )
-                              );
-                            }
-                          }}
-                        />
-                        <span className="text-sm">
-                          <span className="font-semibold">{product.name}</span>{" "}
-                          ({product.price} MAD){" "}
-                          <span className="italic text-xs">
-                            +{product.tax}%
-                          </span>
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                  {selectedBusiness && products.length > 0 ? (
+                    <div className="space-y-2 max-h-40 overflow-y-auto border p-2 rounded-md">
+                      {products.map((product) => (
+                        <div key={product.id} className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id={`product-${product.id}`} // Add id for label association
+                            checked={selectedProducts.some(p => p.id === product.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedProducts([
+                                  ...selectedProducts,
+                                  product,
+                                ]);
+                              } else {
+                                setSelectedProducts(
+                                  selectedProducts.filter(
+                                    (p) => p.id !== product.id
+                                  )
+                                );
+                              }
+                            }}
+                          />
+                          <label htmlFor={`product-${product.id}`} className="text-sm cursor-pointer">
+                            <span className="font-semibold">{product.name}</span>{" "}
+                            ({product.price} MAD){" "}
+                            <span className="italic text-xs">
+                              +{product.tax}%
+                            </span>
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  ) : selectedBusiness ? (
+                     <p className="text-sm text-gray-500">No products found for the selected business. Please add products first.</p>
+                  ) : (
+                     <p className="text-sm text-gray-500">Select a business to see products.</p>
+                  )}
                 </div>
 
                 <label className="col-span-2 text-sm flex items-center gap-2 border-dashed border-neutral-400 border w-fit rounded p-1">
@@ -569,6 +659,7 @@ export default function InvoicesPage() {
                 <button
                   type="submit"
                   className="col-span-2 cursor-pointer border border-blue-600 text-blue-600 py-2 rounded hover:bg-blue-50"
+                  disabled={!selectedBusiness || !selectedClient || selectedProducts.length === 0}
                 >
                   Save Invoice
                 </button>
@@ -577,7 +668,9 @@ export default function InvoicesPage() {
           </div>
         )}
 
-        {invoices.length > 0 ? (
+        {isLoadingInvoices ? (
+          <p className="font-light text-gray-500 mt-6">Loading invoices...</p>
+        ) : invoices.length > 0 ? (
           <div className="mt-6 border border-neutral-300 border-dashed rounded-xl p-4">
             <h2 className="text-xl font-semibold mb-4">Your Invoices</h2>
             <div className="overflow-x-auto">
@@ -612,10 +705,11 @@ export default function InvoicesPage() {
                       className="h-14 border-b border-neutral-200"
                     >
                       <td className="px-4 py-2">{invoice.title}</td>
-                      <td className="px-4 py-2">{invoice.client.name}</td>
+                      {/* Make sure invoice.client is an object with a name property */}
+                      <td className="px-4 py-2">{invoice.client?.name || 'N/A'}</td>
                       <td className="px-4 py-2">{invoice.product_count}</td>
-                      <td className="px-4 py-2">{invoice.subtotal} MAD</td>
-                      <td className="px-4 py-2">{invoice.total} MAD</td>
+                      <td className="px-4 py-2">{invoice.subtotal?.toFixed(2)} MAD</td>
+                      <td className="px-4 py-2">{invoice.total?.toFixed(2)} MAD</td>
                       <td className="px-4 py-2">
                         {invoice.paid ? "Yes" : "No"}
                       </td>
