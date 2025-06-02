@@ -22,11 +22,15 @@ export default function Home() {
     const user = sessionData.session?.user;
 
     if (user) {
-      const { data: userData } = await supabase
+      const { data: userData, error } = await supabase
         .from("user")
         .select("name, email, created_at")
         .eq("user_id", user.id)
-        .single();
+        .maybeSingle();
+        
+      if (error) {
+        console.error("Error fetching user profile:", error);
+      }
 
       setUserInfo(userData || null);
 
@@ -296,14 +300,24 @@ export default function Home() {
               <table className="min-w-full text-sm text-left">
                 <thead className="bg-gray-100 rounded">
                   <tr className="h-14">
-                    <th className="px-4 font-light text-gray-500 py-2 rounded-tl-lg">Name</th>
+                    <th className="px-4 font-light text-gray-500 py-2 rounded-tl-lg">
+                      Name
+                    </th>
                     <th className="px-4 font-light text-gray-500 py-2">ICE</th>
                     <th className="px-4 font-light text-gray-500 py-2">RC</th>
-                    <th className="px-4 font-light text-gray-500 py-2">Phone</th>
-                    <th className="px-4 font-light text-gray-500 py-2">Email</th>
-                    <th className="px-4 font-light text-gray-500 py-2">Taxed</th>
+                    <th className="px-4 font-light text-gray-500 py-2">
+                      Phone
+                    </th>
+                    <th className="px-4 font-light text-gray-500 py-2">
+                      Email
+                    </th>
+                    <th className="px-4 font-light text-gray-500 py-2">
+                      Taxed
+                    </th>
                     <th className="px-4 font-light text-gray-500 py-2">City</th>
-                    <th className="px-4 font-light text-gray-500 py-2 rounded-tr-lg">Date</th>
+                    <th className="px-4 font-light text-gray-500 py-2 rounded-tr-lg">
+                      Date
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="">
