@@ -18,22 +18,39 @@ export default function Home() {
   const [showModal, setShowModal] = useState(false);
 
   const fetchData = async () => {
-    const { data: sessionData } = await supabase.auth.getSession();
+    console.log("fetchData called");
+    const { data: sessionData, error: sessionError } =
+      await supabase.auth.getSession();
+
+    if (sessionError) {
+      console.error("Error getting session:", sessionError.message);
+      setUserInfo(null);
+      return;
+    }
+    console.log("Session Data:", sessionData);
+
     const user = sessionData.session?.user;
+    console.log("User Object:", user);
 
     if (user) {
-      const { data: userData, error } = await supabase
+      console.log("User ID:", user.id);
+      const { data: userData, error: userError } = await supabase
         .from("user")
         .select("name, email, created_at")
         .eq("user_id", user.id)
         .maybeSingle();
-        
-      if (error) {
-        console.error("Error fetching user profile:", error);
-      }
 
+      if (userError) {
+        console.error("Error fetching user profile:", userError.message);
+        setUserInfo(null);
+        return;
+      }
+      console.log("User Profile Data (from 'user' table):", userData);
       setUserInfo(userData || null);
 
+      if (userData) {
+        setUserInfo(userData);
+      }
       const { data: businessData } = await supabase
         .from("business")
         .select("*")
@@ -58,6 +75,9 @@ export default function Home() {
 
         setInvoicesInfo(invoicesData || []);
       }
+    } else {
+      console.log("No active user session found after getSession.");
+      setUserInfo(null);
     }
   };
 
@@ -193,6 +213,8 @@ export default function Home() {
                       business_address: formData.get("business_address"),
                       postal_code: formData.get("postal_code"),
                       rc: formData.get("rc"),
+                      tp: formData.get("tp"),
+                      capital: formData.get("capital"),
                       user_wants: formData.get("user_wants"),
                       if: formData.get("if"),
                       tax_rate: parseFloat(formData.get("tax_rate") as string),
@@ -215,14 +237,12 @@ export default function Home() {
                   name="business_name"
                   placeholder="Business Name"
                   className="p-2 rounded-lg h-10 bg-blue-50 text-sm"
-                  required
                 />
                 <input
                   name="business_email"
                   type="email"
                   placeholder="Email"
                   className="p-2 rounded-lg h-10 bg-blue-50 text-sm"
-                  required
                 />
                 <input
                   name="business_phone"
@@ -232,6 +252,16 @@ export default function Home() {
                 <input
                   name="business_ice"
                   placeholder="ICE"
+                  className="p-2 rounded-lg h-10 bg-blue-50 text-sm"
+                />
+                <input
+                  name="tp"
+                  placeholder="TP"
+                  className="p-2 rounded-lg h-10 bg-blue-50 text-sm"
+                />
+                <input
+                  name="capital"
+                  placeholder="Capital"
                   className="p-2 rounded-lg h-10 bg-blue-50 text-sm"
                 />
                 <input

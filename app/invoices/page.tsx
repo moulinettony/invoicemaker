@@ -14,14 +14,39 @@ import {
 } from "@react-pdf/renderer";
 import { formatAmountInWords } from "@/utils/n2words";
 
-// ... (InvoicePdf component remains the same)
 const InvoicePdf = ({ invoice }: { invoice: any }) => {
+  let actualDiscountAmount = 0;
+  if (invoice.discount_type === "percentage") {
+    actualDiscountAmount =
+      Number(invoice.subtotal || 0) *
+      (Number(invoice.discount_value || 0) / 100);
+  } else {
+    // fixed
+    actualDiscountAmount = Number(invoice.discount_value || 0);
+    // Cap it at subtotal if necessary (though this should have been handled when saving)
+    if (actualDiscountAmount > Number(invoice.subtotal || 0)) {
+      actualDiscountAmount = Number(invoice.subtotal || 0);
+    }
+  }
+  const totalTax = invoice.product
+    .reduce((sum: number, prod: any) => {
+      const originalPrice = Number(prod.price || 0);
+      let itemEffectiveDiscount = 0;
+
+      // Distribute the actualDiscountAmount proportionally
+      if (Number(invoice.subtotal || 0) > 0) {
+        // Avoid division by zero
+        itemEffectiveDiscount =
+          (originalPrice / Number(invoice.subtotal || 0)) *
+          actualDiscountAmount;
+      }
+
+      const priceAfterDiscount = originalPrice - itemEffectiveDiscount;
+      const taxRate = Number(prod.tax || 0);
+      return sum + (priceAfterDiscount * taxRate) / 100;
+    }, 0)
+    .toFixed(2);
   const amountInWords = formatAmountInWords(invoice.total);
-  const totalTax = invoice.product.reduce((sum: number, prod: any) => {
-    const price = Number(prod.price || 0);
-    const tax   = Number(prod.tax   || 0);   // percentage (e.g. 20)
-    return sum + (price * tax) / 100;
-  }, 0).toFixed(2);
   const styles = StyleSheet.create({
     page: {
       fontSize: 12,
@@ -30,6 +55,8 @@ const InvoicePdf = ({ invoice }: { invoice: any }) => {
     row: {
       flexDirection: "row",
       justifyContent: "space-between",
+      paddingHorizontal: 12,
+      marginBottom: 4,
     },
     section: {
       marginBottom: 10,
@@ -81,26 +108,31 @@ const InvoicePdf = ({ invoice }: { invoice: any }) => {
     },
     footerLeft: {
       flexDirection: "row",
+      justifyContent: "space-between",
       fontSize: 9,
+      gap: 9,
       position: "absolute",
       bottom: 0,
       left: 0,
       backgroundColor: "#eee",
       padding: 12,
       borderTopRightRadius: 9999,
+      width: "70%",
     },
     footerRight: {
       fontSize: 10,
       position: "absolute",
+      marginBottom: -4,
       bottom: 0,
       right: 0,
       backgroundColor: "#A8DAFF",
-      paddingHorizontal: 24,
+      paddingHorizontal: 14,
+      textAlign: "center",
       paddingVertical: 6,
       borderTopLeftRadius: 9999,
-      fontWeight: "bold",
+      fontWeight: "semibold",
       textTransform: "uppercase",
-      width: 300,
+      width: "35%",
     },
   });
 
@@ -120,19 +152,19 @@ const InvoicePdf = ({ invoice }: { invoice: any }) => {
               <Text
                 style={{ fontSize: 20, fontWeight: "bold", marginBottom: 10 }}
               >
-                {invoice.business_name}
+                {invoice.client.name}
               </Text>
               <Text style={{ maxWidth: 200, lineHeight: 0.7 }}>
                 <Text style={styles.bold}>Adresse: </Text>
-                {invoice.business_address}, {invoice.city}
+                {invoice.client.address}
               </Text>
               <Text>
                 <Text style={styles.bold}>Email: </Text>
-                {invoice.business_email || "-"}
+                {invoice.client.email || "-"}
               </Text>
               <Text>
                 <Text style={styles.bold}>ICE: </Text>
-                {invoice.business_ice}
+                {invoice.client.ice}
               </Text>
             </View>
             <View style={{ marginBottom: 40 }}>
@@ -191,43 +223,33 @@ const InvoicePdf = ({ invoice }: { invoice: any }) => {
 
           <View style={{ marginTop: 60, alignItems: "flex-end" }}>
             <View style={{ width: "60%" }}>
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  marginBottom: 10,
-                  paddingHorizontal: 12,
-                }}
-              >
+              <View style={styles.row}>
+                {" "}
+                {/* Assuming styles.row handles layout */}
                 <Text>Total-HT :</Text>
-                <Text>{invoice.subtotal.toFixed(2)} MAD</Text>
+                <Text>{Number(invoice.subtotal || 0).toFixed(2)} MAD</Text>
               </View>
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  marginBottom: 10,
-                  paddingHorizontal: 12,
-                }}
-              >
+
+              {Number(invoice.discount_value || 0) > 0 && (
+                <View style={styles.row}>
+                  <Text>
+                    Remise
+                    {invoice.discount_type === "percentage"
+                      ? ` (${invoice.discount_value}%)`
+                      : " (Fixe)"}
+                    :
+                  </Text>
+                  <Text>-{actualDiscountAmount.toFixed(2)} MAD</Text>
+                </View>
+              )}
+
+              <View style={styles.row}>
                 <Text>TVA:</Text>
                 <Text>{totalTax} MAD</Text>
               </View>
-              {invoice.discount > 0 && (
-                <View
-                  style={{
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    marginBottom: 10,
-                  }}
-                >
-                  <Text>Remise :</Text>
-                  <Text>{invoice.discount}%</Text>
-                </View>
-              )}
               <View style={styles.totalRow}>
                 <Text>Total TTC :</Text>
-                <Text>{invoice.total.toFixed(2)} MAD</Text>
+                <Text>{Number(invoice.total || 0).toFixed(2)} MAD</Text>
               </View>
               <Text
                 style={{
@@ -277,22 +299,14 @@ const InvoicePdf = ({ invoice }: { invoice: any }) => {
         </View>
 
         <View style={styles.footerLeft}>
-          <View
-            style={{
-              paddingRight: 10,
-              marginRight: 6,
-              borderRight: 1,
-              borderColor: "#999",
-            }}
-          >
+          <View>
             <Text>Capital</Text>
             <Text>100.000 Dhs</Text>
           </View>
           <View
             style={{
-              paddingRight: 10,
-              marginRight: 6,
-              borderRight: 1,
+              paddingLeft: 10,
+              borderLeft: 1,
               borderColor: "#999",
             }}
           >
@@ -301,18 +315,34 @@ const InvoicePdf = ({ invoice }: { invoice: any }) => {
           </View>
           <View
             style={{
-              paddingRight: 10,
-              marginRight: 6,
-              borderRight: 1,
+              paddingLeft: 10,
+              borderLeft: 1,
               borderColor: "#999",
             }}
           >
             <Text>TP</Text>
             <Text>25712072</Text>
           </View>
-          <View style={{ paddingRight: 30 }}>
-            <Text>I.F. 52582248</Text>
-            <Text>ICE 003115391000030</Text>
+          <View
+            style={{
+              paddingLeft: 10,
+              borderLeft: 1,
+              borderColor: "#999",
+            }}
+          >
+            <Text>I.F.</Text>
+            <Text>52582248</Text>
+          </View>
+          <View
+            style={{
+              paddingLeft: 10,
+              paddingRight: 30,
+              borderLeft: 1,
+              borderColor: "#999",
+            }}
+          >
+            <Text>ICE</Text>
+            <Text>003115391000030</Text>
           </View>
         </View>
 
@@ -324,7 +354,6 @@ const InvoicePdf = ({ invoice }: { invoice: any }) => {
   );
 };
 
-
 export default function InvoicesPage() {
   const [showModal, setShowModal] = useState(false);
   const [businesses, setBusinesses] = useState<any[]>([]);
@@ -333,20 +362,48 @@ export default function InvoicesPage() {
   const [selectedBusiness, setSelectedBusiness] = useState<string>("");
   const [selectedClient, setSelectedClient] = useState<any>(null);
   const [selectedProducts, setSelectedProducts] = useState<any[]>([]);
-  const [title, setTitle] = useState("");
   const [paid, setPaid] = useState(false);
   const [invoices, setInvoices] = useState<any[]>([]);
   const [isLoadingInvoices, setIsLoadingInvoices] = useState(true); // Added loading state for invoices
+  const [discountPercentage, setDiscountPercentage] = useState<number>(0);
+  const [discountType, setDiscountType] = useState<"percentage" | "fixed">(
+    "percentage"
+  );
+  const [discountValue, setDiscountValue] = useState<number>(0);
 
-  const subtotal = selectedProducts.reduce(
+  const originalSubtotal = selectedProducts.reduce(
     (sum, product) => sum + Number(product.price || 0),
     0
   );
-  const total = selectedProducts.reduce((sum, product) => {
+  let discountAmount = 0;
+  if (discountType === "percentage") {
+    discountAmount = originalSubtotal * (Number(discountValue || 0) / 100);
+  } else {
+    // Fixed amount
+    discountAmount = Number(discountValue || 0);
+    // Ensure fixed discount doesn't make subtotal negative (optional, but good practice)
+    if (discountAmount > originalSubtotal) {
+      discountAmount = originalSubtotal; // Cap discount at subtotal
+    }
+  }
+  const subtotalAfterDiscount = originalSubtotal - discountAmount;
+
+  const totalTaxOnDiscountedItems = selectedProducts.reduce((sum, product) => {
     const price = Number(product.price || 0);
+    let itemEffectiveDiscount = 0;
+
+    if (originalSubtotal > 0) {
+      // Avoid division by zero if no products
+      // Distribute the total invoice discount proportionally to each item's price
+      itemEffectiveDiscount = (price / originalSubtotal) * discountAmount;
+    }
+
+    const priceAfterItemDiscount = price - itemEffectiveDiscount;
     const tax = Number(product.tax || 0);
-    return sum + price + (price * tax) / 100;
+    return sum + (priceAfterItemDiscount * tax) / 100;
   }, 0);
+
+  const total = subtotalAfterDiscount + totalTaxOnDiscountedItems;
 
   const fetchBusinessData = async () => {
     const { data: sessionData } = await supabase.auth.getSession();
@@ -355,7 +412,7 @@ export default function InvoicesPage() {
 
     const { data: businessData, error } = await supabase
       .from("business")
-      .select("id, business_name") // Fetch only necessary fields
+      .select("id, business_name")
       .eq("user_id", user.id);
 
     if (error) {
@@ -369,9 +426,9 @@ export default function InvoicesPage() {
 
   const fetchClientsAndProducts = async (businessId: string) => {
     if (!businessId) {
-        setClients([]);
-        setProducts([]);
-        return;
+      setClients([]);
+      setProducts([]);
+      return;
     }
     const { data: clientsData } = await supabase
       .from("client")
@@ -385,7 +442,6 @@ export default function InvoicesPage() {
     setProducts(productsData || []);
   };
 
-  // MODIFIED fetchInvoices function
   const fetchUserInvoices = async () => {
     setIsLoadingInvoices(true);
     const { data: sessionData } = await supabase.auth.getSession();
@@ -397,10 +453,9 @@ export default function InvoicesPage() {
       return;
     }
 
-    // 1. Get the user's business IDs
     const { data: userBusinesses, error: businessError } = await supabase
       .from("business")
-      .select("id") // Only need the IDs
+      .select("id")
       .eq("user_id", user.id);
 
     if (businessError) {
@@ -411,7 +466,6 @@ export default function InvoicesPage() {
     }
 
     if (!userBusinesses || userBusinesses.length === 0) {
-      // User has no businesses, so no invoices to show
       setInvoices([]);
       setIsLoadingInvoices(false);
       return;
@@ -419,12 +473,11 @@ export default function InvoicesPage() {
 
     const businessIds = userBusinesses.map((b) => b.id);
 
-    // 2. Fetch invoices belonging to those businesses
     const { data: invoiceData, error: invoiceError } = await supabase
       .from("invoice")
-      .select("*") // You might want to select specific columns if 'client' is a joined object
+      .select("*")
       .in("business_id", businessIds)
-      .order('created_at', { ascending: false }); // Optional: order by most recent
+      .order("created_at", { ascending: false });
 
     if (invoiceError) {
       console.error("Error fetching invoices:", invoiceError.message);
@@ -435,20 +488,17 @@ export default function InvoicesPage() {
     setIsLoadingInvoices(false);
   };
 
-  // This useEffect fetches businesses for the dropdown AND invoices for the current user
   useEffect(() => {
-    fetchBusinessData(); // For the dropdown
-    fetchUserInvoices(); // For the table
+    fetchBusinessData();
+    fetchUserInvoices();
   }, []);
 
-  // This useEffect remains for fetching clients/products when a business is selected in the modal
   useEffect(() => {
     if (selectedBusiness) {
       fetchClientsAndProducts(selectedBusiness);
     } else {
-        // Clear clients and products if no business is selected
-        setClients([]);
-        setProducts([]);
+      setClients([]);
+      setProducts([]);
     }
   }, [selectedBusiness]);
 
@@ -456,60 +506,82 @@ export default function InvoicesPage() {
     e.preventDefault();
 
     if (!selectedBusiness || !selectedClient || selectedProducts.length === 0) {
-        alert("Please select a business, client, and at least one product.");
-        return;
+      alert("Please select a business, client, and at least one product.");
+      return;
     }
+    // Recalculate discountAmount just before submit to ensure it's capped if fixed
+    let finalDiscountAmount = 0;
+    if (discountType === "percentage") {
+      finalDiscountAmount =
+        originalSubtotal * (Number(discountValue || 0) / 100);
+    } else {
+      // Fixed amount
+      finalDiscountAmount = Number(discountValue || 0);
+      if (finalDiscountAmount > originalSubtotal) {
+        finalDiscountAmount = originalSubtotal;
+      }
+    }
+    // Ensure subtotalAfterDiscount and total are based on this potentially capped finalDiscountAmount
+    const finalSubtotalAfterDiscount = originalSubtotal - finalDiscountAmount;
+    const finalTotalTax = selectedProducts.reduce((sum, product) => {
+      const price = Number(product.price || 0);
+      let itemEffectiveDiscount = 0;
+      if (originalSubtotal > 0) {
+        itemEffectiveDiscount =
+          (price / originalSubtotal) * finalDiscountAmount;
+      }
+      const priceAfterItemDiscount = price - itemEffectiveDiscount;
+      const tax = Number(product.tax || 0);
+      return sum + (priceAfterItemDiscount * tax) / 100;
+    }, 0);
+    const finalTotal = finalSubtotalAfterDiscount + finalTotalTax;
 
     const invoiceData = {
-      title,
-      client: selectedClient, // Storing the whole client object
-      product: selectedProducts, // Storing array of product objects
-      subtotal,
-      total,
+      client: selectedClient,
+      product: selectedProducts,
+      subtotal: originalSubtotal,
+      discount_type: discountType,
+      discount_value: Number(discountValue || 0),
+      // You might also want to store the calculated discountAmount itself
+      // discount_amount_applied: finalDiscountAmount,
+      total: finalTotal, // Use the final calculated total
       paid,
       business_id: selectedBusiness,
       product_count: selectedProducts.length,
-      // created_at is set by default by Supabase if column has default value NOW()
-      // If not, keep: created_at: new Date().toISOString(),
     };
 
     const { data: insertedInvoice, error } = await supabase
       .from("invoice")
       .insert(invoiceData)
-      .select() // To get the inserted row back, especially if you need its ID or created_at
-      .single(); // Assuming you insert one invoice at a time
-
+      .select()
+      .single();
 
     if (!error && insertedInvoice) {
-      setTitle("");
-      setSelectedClient(null);
-      setSelectedProducts([]);
-      setPaid(false);
+      // ... reset other states ...
+      setDiscountType("percentage"); // Reset discount type
+      setDiscountValue(0); // Reset discount value
       setShowModal(false);
-      // setSelectedBusiness(""); // Optionally reset selected business for next invoice
-      fetchUserInvoices(); // Refresh the invoice list
+      fetchUserInvoices();
 
-      // 🆕 Fetch full business info for PDF generation
+      // ... PDF generation logic (pass fullInvoiceForPdf to InvoicePdf) ...
       const { data: business } = await supabase
         .from("business")
         .select("*")
         .eq("id", selectedBusiness)
         .single();
 
-      // Ensure client data is properly structured for the PDF
-      // The 'client' in invoiceData is already the selectedClient object
       const fullInvoiceForPdf = {
-        ...insertedInvoice, // Use the actual inserted invoice data
+        ...insertedInvoice, // This now contains discount_type and discount_value
         business_name: business?.business_name,
         business_address: business?.business_address,
         city: business?.city,
         business_email: business?.business_email,
         business_ice: business?.business_ice,
-        // 'client' object is already part of insertedInvoice
-        // 'product' array is already part of insertedInvoice
       };
 
-      const blob = await pdf(<InvoicePdf invoice={fullInvoiceForPdf} />).toBlob();
+      const blob = await pdf(
+        <InvoicePdf invoice={fullInvoiceForPdf} />
+      ).toBlob();
       const url = URL.createObjectURL(blob);
       window.open(url);
     } else {
@@ -521,7 +593,9 @@ export default function InvoicesPage() {
   return (
     <div className="space-y-4 p-3 mt-16 h-[calc(100vh-64px)]">
       <div className="bg-white p-6 rounded h-full overflow-auto">
-        <div className="grid grid-cols-4 gap-4 mt-4"> {/* This grid seems to be just for the button */}
+        <div className="grid grid-cols-4 gap-4 mt-4">
+          {" "}
+          {/* This grid seems to be just for the button */}
           <div className="relative border border-neutral-300 border-dashed rounded-xl p-4">
             <Plus className="absolute right-4 top-4 h-8 w-8 text-neutral-700 p-2 rounded bg-neutral-100" />
             <h2 className="text-sm font-semibold">Add New Invoice</h2>
@@ -545,10 +619,11 @@ export default function InvoicesPage() {
               </button>
               <h2 className="text-2xl font-bold">Create New Invoice</h2>
               <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4">
+                {/* Business Select - NO CHANGE */}
                 <select
                   value={selectedBusiness}
                   onChange={(e) => setSelectedBusiness(e.target.value)}
-                  required
+                  required // Good to have
                   className="col-span-2 p-2 rounded-lg h-10 border text-sm"
                 >
                   <option value="">Select Business</option>
@@ -559,6 +634,7 @@ export default function InvoicesPage() {
                   ))}
                 </select>
 
+                {/* Client Select - NO CHANGE */}
                 {selectedBusiness && clients.length > 0 && (
                   <select
                     value={selectedClient?.id ?? ""}
@@ -568,7 +644,7 @@ export default function InvoicesPage() {
                       );
                       setSelectedClient(foundClient ?? null);
                     }}
-                    required
+                    required // Good to have
                     className="col-span-2 p-2 rounded-lg h-10 border text-sm"
                   >
                     <option value="">Select Client</option>
@@ -579,21 +655,15 @@ export default function InvoicesPage() {
                     ))}
                   </select>
                 )}
-                 {selectedBusiness && clients.length === 0 && (
-                    <p className="text-sm text-gray-500">No clients found for the selected business. Please add clients first.</p>
+                {/* Conditional message for no clients - NO CHANGE */}
+                {selectedBusiness && clients.length === 0 && (
+                  <p className="col-span-2 text-sm text-gray-500">
+                    No clients found for the selected business. Please add
+                    clients first.
+                  </p>
                 )}
 
-                <div className="w-full">
-                  <label className="block text-sm ml-1 mb-1 font-semibold">Invoice Title*:</label>
-                  <input
-                    type="text"
-                    placeholder="Invoice Title"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    required
-                    className="col-span-2 p-2 rounded-lg h-10 bg-blue-50 text-sm w-full"
-                  />
-                </div>
+                {/* Product Select - NO CHANGE */}
                 <div className="col-span-2">
                   <label className="block mb-2 text-sm font-semibold">
                     Select Product(s):
@@ -601,11 +671,16 @@ export default function InvoicesPage() {
                   {selectedBusiness && products.length > 0 ? (
                     <div className="space-y-2 max-h-40 overflow-y-auto border p-2 rounded-md">
                       {products.map((product) => (
-                        <div key={product.id} className="flex items-center gap-2">
+                        <div
+                          key={product.id}
+                          className="flex items-center gap-2"
+                        >
                           <input
                             type="checkbox"
-                            id={`product-${product.id}`} // Add id for label association
-                            checked={selectedProducts.some(p => p.id === product.id)}
+                            id={`product-${product.id}`}
+                            checked={selectedProducts.some(
+                              (p) => p.id === product.id
+                            )}
                             onChange={(e) => {
                               if (e.target.checked) {
                                 setSelectedProducts([
@@ -621,8 +696,13 @@ export default function InvoicesPage() {
                               }
                             }}
                           />
-                          <label htmlFor={`product-${product.id}`} className="text-sm cursor-pointer">
-                            <span className="font-semibold">{product.name}</span>{" "}
+                          <label
+                            htmlFor={`product-${product.id}`}
+                            className="text-sm cursor-pointer"
+                          >
+                            <span className="font-semibold">
+                              {product.name}
+                            </span>{" "}
                             ({product.price} MAD){" "}
                             <span className="italic text-xs">
                               +{product.tax}%
@@ -631,14 +711,67 @@ export default function InvoicesPage() {
                         </div>
                       ))}
                     </div>
-                  ) : selectedBusiness ? (
-                     <p className="text-sm text-gray-500">No products found for the selected business. Please add products first.</p>
                   ) : (
-                     <p className="text-sm text-gray-500">Select a business to see products.</p>
+                    <p className="col-span-2 text-sm text-gray-500">
+                      Select a business to see products.
+                    </p>
                   )}
                 </div>
 
-                <label className="col-span-2 text-sm flex items-center gap-2 border-dashed border-neutral-400 border w-fit rounded p-1">
+                {/* === ADD DISCOUNT INPUT FIELD HERE === */}
+                <div className="flex w-full gap-3">
+                  <div className="w-1/2">
+                    <label
+                      htmlFor="discountType"
+                      className="block mb-1 text-sm font-semibold"
+                    >
+                      Discount Type:
+                    </label>
+                    <select
+                      id="discountType"
+                      value={discountType}
+                      onChange={(e) => {
+                        setDiscountType(
+                          e.target.value as "percentage" | "fixed"
+                        );
+                        setDiscountValue(0); // Reset value when type changes
+                      }}
+                      className="w-full p-1 h-8 rounded border text-sm"
+                    >
+                      <option value="percentage">Percentage (%)</option>
+                      <option value="fixed">Fixed Amount (MAD)</option>
+                    </select>
+                  </div>
+
+                  {/* Discount Value Input */}
+                  <div className="w-1/2">
+                    <label
+                      htmlFor="discountValue"
+                      className="block mb-1 text-sm font-semibold"
+                    >
+                      Discount Value:
+                    </label>
+                    <input
+                      type="number"
+                      id="discountValue"
+                      value={discountValue}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        setDiscountValue(isNaN(val) || val < 0 ? 0 : val);
+                      }}
+                      min="0"
+                      step="1"
+                      className="w-full p-1 h-8 rounded border text-sm"
+                      placeholder={
+                        discountType === "percentage"
+                          ? "e.g., 10 for 10%"
+                          : "e.g., 50"
+                      }
+                    />
+                  </div>
+                </div>
+                {/* Mark as Paid - NO CHANGE */}
+                <label className="col-span-2 text-sm flex items-center gap-2 border cursor-pointer border-neutral-400 w-fit rounded p-1">
                   <input
                     type="checkbox"
                     checked={paid}
@@ -647,19 +780,56 @@ export default function InvoicesPage() {
                   Mark as Paid
                 </label>
 
+                {/* === UPDATE TOTALS DISPLAY SECTION HERE === */}
                 <div className="col-span-2 border-t pt-4 space-y-1 text-sm">
-                  <p>
-                    Subtotal: <strong>{subtotal.toFixed(2)} MAD</strong>
+                  <p className="flex justify-between">
+                    <span>Subtotal (HT):</span>
+                    {/* Assumes 'originalSubtotal' state/variable exists */}
+                    <strong>{originalSubtotal.toFixed(2)} MAD</strong>
                   </p>
-                  <p>
-                    Total: <strong>{total.toFixed(2)} MAD</strong>
+
+                  {Number(discountValue) > 0 && ( // Show if discountValue is entered
+                    <>
+                      <p className="flex justify-between">
+                        <span>
+                          Discount
+                          {discountType === "percentage"
+                            ? ` (${discountValue}%)`
+                            : " (Fixed)"}
+                          :
+                        </span>
+                        <strong className="text-red-500">
+                          -{discountAmount.toFixed(2)} MAD
+                        </strong>
+                      </p>
+                      <p className="flex justify-between">
+                        <span>Subtotal after Discount:</span>
+                        <strong>{subtotalAfterDiscount.toFixed(2)} MAD</strong>
+                      </p>
+                    </>
+                  )}
+
+                  <p className="flex justify-between">
+                    <span>TVA:</span>
+                    {/* Assumes 'totalTaxOnDiscountedItems' state/variable exists */}
+                    <strong>{totalTaxOnDiscountedItems.toFixed(2)} MAD</strong>
+                  </p>
+                  <p className="flex justify-between font-bold text-base mt-2 border-t pt-2">
+                    <span>Total TTC:</span>
+                    {/* Assumes 'total' (final total) state/variable exists */}
+                    <strong>{total.toFixed(2)} MAD</strong>
                   </p>
                 </div>
 
+                {/* Save Invoice Button - NO CHANGE */}
                 <button
                   type="submit"
-                  className="col-span-2 cursor-pointer border border-blue-600 text-blue-600 py-2 rounded hover:bg-blue-50"
-                  disabled={!selectedBusiness || !selectedClient || selectedProducts.length === 0}
+                  className="col-span-2 cursor-pointer border border-blue-600 text-blue-600 py-2 rounded hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={
+                    !selectedBusiness ||
+                    !selectedClient ||
+                    selectedProducts.length === 0
+                  }
                 >
                   Save Invoice
                 </button>
@@ -677,9 +847,6 @@ export default function InvoicesPage() {
               <table className="min-w-full text-sm text-left">
                 <thead className="bg-gray-100 rounded">
                   <tr className="h-14">
-                    <th className="px-4 font-light text-gray-500 py-2 rounded-tl-lg">
-                      Title
-                    </th>
                     <th className="px-4 font-light text-gray-500 py-2">
                       Client Name
                     </th>
@@ -704,12 +871,16 @@ export default function InvoicesPage() {
                       key={invoice.id}
                       className="h-14 border-b border-neutral-200"
                     >
-                      <td className="px-4 py-2">{invoice.title}</td>
-                      {/* Make sure invoice.client is an object with a name property */}
-                      <td className="px-4 py-2">{invoice.client?.name || 'N/A'}</td>
+                      <td className="px-4 py-2">
+                        {invoice.client?.name || "N/A"}
+                      </td>
                       <td className="px-4 py-2">{invoice.product_count}</td>
-                      <td className="px-4 py-2">{invoice.subtotal?.toFixed(2)} MAD</td>
-                      <td className="px-4 py-2">{invoice.total?.toFixed(2)} MAD</td>
+                      <td className="px-4 py-2">
+                        {invoice.subtotal?.toFixed(2)} MAD
+                      </td>
+                      <td className="px-4 py-2">
+                        {invoice.total?.toFixed(2)} MAD
+                      </td>
                       <td className="px-4 py-2">
                         {invoice.paid ? "Yes" : "No"}
                       </td>

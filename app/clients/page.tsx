@@ -105,7 +105,6 @@ export default function ClientsPage() {
                   <select
                     name="business_id"
                     className="p-2 rounded-lg h-10 border text-sm col-span-2"
-                    required
                   >
                     <option value="">Select Business</option>
                     {businesses.map((biz) => (
@@ -119,7 +118,6 @@ export default function ClientsPage() {
                   name="name"
                   placeholder="Client Name"
                   className="p-2 rounded-lg h-10 bg-blue-50 text-sm"
-                  required
                 />
                 <input
                   name="email"
