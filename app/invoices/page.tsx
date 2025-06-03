@@ -15,6 +15,12 @@ import {
 import { formatAmountInWords } from "@/utils/n2words";
 
 const InvoicePdf = ({ invoice }: { invoice: any }) => {
+  const formatCurrency = (value: number | string | undefined | null) => {
+    const num = Number(value || 0);
+    const parts = num.toFixed(2).split(".");
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, " "); // Add space
+    return parts.join(".");
+  };
   let actualDiscountAmount = 0;
   if (invoice.discount_type === "percentage") {
     actualDiscountAmount =
@@ -217,7 +223,7 @@ const InvoicePdf = ({ invoice }: { invoice: any }) => {
                 <Text style={styles.bold}>{prod.name}</Text>
                 <Text>{prod.description}</Text>
               </View>
-              <Text style={styles.cell3}>{prod.price.toFixed(2)}</Text>
+              <Text style={styles.cell3}>{formatCurrency(prod.price)}</Text>
             </View>
           ))}
 
@@ -227,23 +233,23 @@ const InvoicePdf = ({ invoice }: { invoice: any }) => {
                 {" "}
                 {/* Assuming styles.row handles layout */}
                 <Text>Total-HT :</Text>
-                <Text>{Number(invoice.subtotal || 0).toFixed(2)} MAD</Text>
+                <Text>{formatCurrency(invoice.subtotal)} MAD</Text>
               </View>
 
               {Number(invoice.discount_value || 0) > 0 && (
                 <View style={styles.row}>
                   <Text>Remise:</Text>
-                  <Text>-{actualDiscountAmount.toFixed(2)} MAD</Text>
+                  <Text>-{formatCurrency(actualDiscountAmount)} MAD</Text>
                 </View>
               )}
 
               <View style={styles.row}>
                 <Text>TVA:</Text>
-                <Text>{totalTax} MAD</Text>
+                <Text>{formatCurrency(totalTax)} MAD</Text>
               </View>
               <View style={styles.totalRow}>
                 <Text>Total TTC :</Text>
-                <Text>{Number(invoice.total || 0).toFixed(2)} MAD</Text>
+                <Text>{formatCurrency(invoice.total)} MAD</Text>
               </View>
               <Text
                 style={{
