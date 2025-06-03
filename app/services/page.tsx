@@ -48,16 +48,16 @@ export default function productsPage() {
 
   return (
     <div className="space-y-4 p-3 mt-16 h-[calc(100vh-64px)]">
-      <div className="bg-white p-6 rounded h-full">
+      <div className="bg-white p-6 rounded h-full overflow-auto">
         <div className="grid grid-cols-4 gap-4 mt-4">
           <div className="relative border border-neutral-300 border-dashed rounded-xl p-4">
             <Plus className="absolute right-4 top-4 h-8 w-8 text-neutral-700 p-2 rounded bg-neutral-100" />
-            <h2 className="text-sm font-semibold">Add New Product</h2>
+            <h2 className="text-sm font-semibold">Add New Service</h2>
             <button
               onClick={() => setShowModal(true)}
               className="mt-8 cursor-pointer px-4 py-2 w-full mt-3 font-semibold text-sm bg-blue-700 text-white rounded-lg hover:bg-blue-700"
             >
-              Add Product
+              Add Service
             </button>
           </div>
         </div>
@@ -71,7 +71,7 @@ export default function productsPage() {
               >
                 ✕
               </button>
-              <h2 className="text-xl font-bold">Create New Product</h2>
+              <h2 className="text-xl font-bold">Create New Service</h2>
               <form
                 className="grid grid-cols-2 gap-4"
                 onSubmit={async (e) => {
@@ -118,7 +118,7 @@ export default function productsPage() {
                 )}
                 <input
                   name="name"
-                  placeholder="Product Name"
+                  placeholder="Service Name"
                   className="p-2 rounded-lg h-10 bg-blue-50 text-sm"
                   required
                 />
@@ -146,7 +146,7 @@ export default function productsPage() {
                   type="submit"
                   className="col-span-2 cursor-pointer border border-blue-600 text-blue-600 py-2 rounded hover:bg-blue-50"
                 >
-                  Save Product
+                  Save Service
                 </button>
               </form>
             </div>
@@ -155,7 +155,7 @@ export default function productsPage() {
 
         {products.length > 0 ? (
           <div className="mt-6 border border-neutral-300 border-dashed rounded-xl p-4">
-            <h2 className="text-xl font-semibold mb-4">Your products</h2>
+            <h2 className="text-xl font-semibold mb-4">Your services</h2>
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm text-left">
                 <thead className="bg-gray-100 rounded">
@@ -207,7 +207,7 @@ export default function productsPage() {
           </div>
         ) : (
           <p className="font-light text-gray-500 mt-6">
-            No products found for your account.
+            No services found for your account.
           </p>
         )}
       </div>

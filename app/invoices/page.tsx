@@ -232,13 +232,7 @@ const InvoicePdf = ({ invoice }: { invoice: any }) => {
 
               {Number(invoice.discount_value || 0) > 0 && (
                 <View style={styles.row}>
-                  <Text>
-                    Remise
-                    {invoice.discount_type === "percentage"
-                      ? ` (${invoice.discount_value}%)`
-                      : " (Fixe)"}
-                    :
-                  </Text>
+                  <Text>Remise:</Text>
                   <Text>-{actualDiscountAmount.toFixed(2)} MAD</Text>
                 </View>
               )}
@@ -506,7 +500,7 @@ export default function InvoicesPage() {
     e.preventDefault();
 
     if (!selectedBusiness || !selectedClient || selectedProducts.length === 0) {
-      alert("Please select a business, client, and at least one product.");
+      alert("Please select a business, client, and at least one service.");
       return;
     }
     // Recalculate discountAmount just before submit to ensure it's capped if fixed
@@ -666,7 +660,7 @@ export default function InvoicesPage() {
                 {/* Product Select - NO CHANGE */}
                 <div className="col-span-2">
                   <label className="block mb-2 text-sm font-semibold">
-                    Select Product(s):
+                    Select Service(s):
                   </label>
                   {selectedBusiness && products.length > 0 ? (
                     <div className="space-y-2 max-h-40 overflow-y-auto border p-2 rounded-md">
@@ -713,7 +707,7 @@ export default function InvoicesPage() {
                     </div>
                   ) : (
                     <p className="col-span-2 text-sm text-gray-500">
-                      Select a business to see products.
+                      Select a business to see services.
                     </p>
                   )}
                 </div>
@@ -851,7 +845,7 @@ export default function InvoicesPage() {
                       Client Name
                     </th>
                     <th className="px-4 font-light text-gray-500 py-2">
-                      Product Count
+                      Service Count
                     </th>
                     <th className="px-4 font-light text-gray-500 py-2">
                       Subtotal
