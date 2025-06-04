@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { Plus } from "lucide-react";
+import { Plus, MoreVertical } from "lucide-react";
 import {
   Document,
   Page,
@@ -18,7 +18,7 @@ const InvoicePdf = ({ invoice }: { invoice: any }) => {
   const formatCurrency = (value: number | string | undefined | null) => {
     const num = Number(value || 0);
     const parts = num.toFixed(2).split(".");
-    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, " "); // Add space
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, " ");
     return parts.join(".");
   };
   let actualDiscountAmount = 0;
@@ -27,9 +27,7 @@ const InvoicePdf = ({ invoice }: { invoice: any }) => {
       Number(invoice.subtotal || 0) *
       (Number(invoice.discount_value || 0) / 100);
   } else {
-    // fixed
     actualDiscountAmount = Number(invoice.discount_value || 0);
-    // Cap it at subtotal if necessary (though this should have been handled when saving)
     if (actualDiscountAmount > Number(invoice.subtotal || 0)) {
       actualDiscountAmount = Number(invoice.subtotal || 0);
     }
@@ -205,7 +203,7 @@ const InvoicePdf = ({ invoice }: { invoice: any }) => {
           </View>
 
           <View style={styles.tableHeader}>
-            <Text style={styles.cell1}>#</Text>
+            <Text style={styles.cell1}></Text>
             <Text style={styles.cell2}>Description</Text>
             <Text style={styles.cell3}>Total (MAD)</Text>
           </View>
@@ -365,11 +363,14 @@ export default function InvoicesPage() {
   const [paid, setPaid] = useState(false);
   const [invoices, setInvoices] = useState<any[]>([]);
   const [isLoadingInvoices, setIsLoadingInvoices] = useState(true); // Added loading state for invoices
-  const [discountPercentage, setDiscountPercentage] = useState<number>(0);
   const [discountType, setDiscountType] = useState<"percentage" | "fixed">(
     "percentage"
   );
   const [discountValue, setDiscountValue] = useState<number>(0);
+  const [editingInvoice, setEditingInvoice] = useState<any | null>(null);
+  const [activeDropdown, setActiveDropdown] = useState<string | null>(null); // To track which dropdown is open
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
+  const [invoiceToDelete, setInvoiceToDelete] = useState<any | null>(null);
 
   const originalSubtotal = selectedProducts.reduce(
     (sum, product) => sum + Number(product.price || 0),
@@ -509,7 +510,8 @@ export default function InvoicesPage() {
       alert("Please select a business, client, and at least one service.");
       return;
     }
-    // Recalculate discountAmount just before submit to ensure it's capped if fixed
+
+    // Recalculate discountAmount and totals (your existing logic is good here)
     let finalDiscountAmount = 0;
     if (discountType === "percentage") {
       finalDiscountAmount =
@@ -521,7 +523,6 @@ export default function InvoicesPage() {
         finalDiscountAmount = originalSubtotal;
       }
     }
-    // Ensure subtotalAfterDiscount and total are based on this potentially capped finalDiscountAmount
     const finalSubtotalAfterDiscount = originalSubtotal - finalDiscountAmount;
     const finalTotalTax = selectedProducts.reduce((sum, product) => {
       const price = Number(product.price || 0);
@@ -536,47 +537,68 @@ export default function InvoicesPage() {
     }, 0);
     const finalTotal = finalSubtotalAfterDiscount + finalTotalTax;
 
-    const invoiceData = {
+    // This is the payload for both insert and update
+    const invoicePayload = {
+      // Renamed from invoiceData for clarity with my previous suggestions
       client: selectedClient,
       product: selectedProducts,
       subtotal: originalSubtotal,
       discount_type: discountType,
       discount_value: Number(discountValue || 0),
-      // You might also want to store the calculated discountAmount itself
-      // discount_amount_applied: finalDiscountAmount,
-      total: finalTotal, // Use the final calculated total
+      total: finalTotal,
       paid,
       business_id: selectedBusiness,
       product_count: selectedProducts.length,
     };
 
-    const { data: insertedInvoice, error } = await supabase
-      .from("invoice")
-      .insert(invoiceData)
-      .select()
-      .single();
+    let processedInvoice: any = null;
+    let Dberror: any = null;
 
-    if (!error && insertedInvoice) {
-      // ... reset other states ...
-      setDiscountType("percentage"); // Reset discount type
-      setDiscountValue(0); // Reset discount value
-      setShowModal(false);
-      fetchUserInvoices();
+    if (editingInvoice) {
+      const { data, error: updateError } = await supabase
+        .from("invoice")
+        .update(invoicePayload)
+        .eq("id", editingInvoice.id) // Use the ID of the invoice being edited
+        .select()
+        .single();
+      processedInvoice = data;
+      Dberror = updateError;
+    } else {
+      const { data: insertedData, error: insertError } = await supabase // Using your variable names
+        .from("invoice")
+        .insert(invoicePayload) // Use invoicePayload
+        .select()
+        .single();
+      processedInvoice = insertedData; // Use 'insertedData' as per your original
+      Dberror = insertError;
+    }
 
-      // ... PDF generation logic (pass fullInvoiceForPdf to InvoicePdf) ...
+    if (!Dberror && processedInvoice) {
+      closeModal();
+      fetchUserInvoices(); // Refresh the list of invoices
+
       const { data: business } = await supabase
         .from("business")
-        .select("*")
-        .eq("id", selectedBusiness)
+        .select("*") // Select all necessary business fields for the PDF
+        .eq("id", selectedBusiness) // selectedBusiness should be correct from the form
         .single();
 
       const fullInvoiceForPdf = {
-        ...insertedInvoice, // This now contains discount_type and discount_value
+        ...processedInvoice, // This now contains all fields of the saved/updated invoice
+        // Add business details needed by InvoicePdf component
         business_name: business?.business_name,
         business_address: business?.business_address,
         city: business?.city,
         business_email: business?.business_email,
         business_ice: business?.business_ice,
+        // Ensure 'count' is handled for PDF.
+        // If 'count' was a sequential number from DB for new invoices, it might be part of 'processedInvoice'.
+        // If not, or for updated invoices, you might use 'id' or another identifier.
+        // The example below assumes 'count' might be in processedInvoice or defaults.
+        count:
+          processedInvoice.count !== undefined
+            ? processedInvoice.count
+            : (Number(processedInvoice.id) || 0) + 100,
       };
 
       const blob = await pdf(
@@ -585,9 +607,96 @@ export default function InvoicesPage() {
       const url = URL.createObjectURL(blob);
       window.open(url);
     } else {
-      console.error("Error inserting invoice:", error?.message);
-      alert(`Error saving invoice: ${error?.message}`);
+      // Handle error
+      const action = editingInvoice ? "updating" : "saving";
+      console.error(`Error ${action} invoice:`, Dberror?.message);
+      alert(`Error ${action} invoice: ${Dberror?.message}`);
     }
+  };
+
+  const resetForm = () => {
+    setSelectedBusiness("");
+    setSelectedClient(null);
+    setSelectedProducts([]);
+    setPaid(false);
+    setDiscountType("percentage");
+    setDiscountValue(0);
+    setEditingInvoice(null); // Crucial
+  };
+  const handleOpenModalForCreate = () => {
+    resetForm(); // Call reset before showing
+    setShowModal(true);
+  };
+
+  const handleOpenModalForEdit = async (invoiceToEdit: any) => {
+    setEditingInvoice(invoiceToEdit);
+    setSelectedBusiness(invoiceToEdit.business_id); // Triggers client/product fetch
+
+    // Assuming invoiceToEdit.client is the full client object and
+    // invoiceToEdit.product is an array of full product objects
+    setSelectedClient(invoiceToEdit.client);
+    setSelectedProducts(invoiceToEdit.product || []);
+    setPaid(invoiceToEdit.paid);
+    setDiscountType(invoiceToEdit.discount_type || "percentage");
+    setDiscountValue(invoiceToEdit.discount_value || 0);
+    setShowModal(true);
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    resetForm();
+  };
+
+  useEffect(() => {
+    if (selectedBusiness) {
+      fetchClientsAndProducts(selectedBusiness);
+    } else {
+      setClients([]);
+      setProducts([]);
+      // Add this condition to prevent clearing selections when populating for an edit
+      if (!editingInvoice) {
+        setSelectedClient(null);
+        setSelectedProducts([]);
+      }
+    }
+  }, [selectedBusiness, editingInvoice]);
+
+  const handleDeleteInvoice = async (invoiceId: string) => {
+    if (!invoiceId) return;
+
+    const { error } = await supabase
+      .from("invoice")
+      .delete()
+      .eq("id", invoiceId);
+
+    if (error) {
+      console.error("Error deleting invoice:", error.message);
+      alert(`Error deleting invoice: ${error.message}`);
+    } else {
+      fetchUserInvoices(); // Refresh the invoice list
+      setShowDeleteConfirmModal(false); // Close confirmation modal on success
+      setInvoiceToDelete(null);
+    }
+  };
+
+  const toggleDropdown = (invoiceId: string) => {
+    setActiveDropdown(activeDropdown === invoiceId ? null : invoiceId);
+  };
+
+  const openEditModalWithInvoice = (invoice: any) => {
+    handleOpenModalForEdit(invoice); // Your existing function
+    setActiveDropdown(null); // Close dropdown
+  };
+
+  const openDeleteConfirmation = (invoice: any) => {
+    setInvoiceToDelete(invoice);
+    setShowDeleteConfirmModal(true);
+    setActiveDropdown(null); // Close dropdown
+  };
+
+  const closeDeleteConfirmation = () => {
+    setShowDeleteConfirmModal(false);
+    setInvoiceToDelete(null);
   };
 
   return (
@@ -600,7 +709,7 @@ export default function InvoicesPage() {
             <Plus className="absolute right-4 top-4 h-8 w-8 text-neutral-700 p-2 rounded bg-neutral-100" />
             <h2 className="text-sm font-semibold">Add New Invoice</h2>
             <button
-              onClick={() => setShowModal(true)}
+              onClick={handleOpenModalForCreate}
               className="mt-8 cursor-pointer px-4 py-2 w-full mt-3 font-semibold text-sm bg-blue-700 text-white rounded-lg hover:bg-blue-700"
             >
               Add Invoice
@@ -613,16 +722,30 @@ export default function InvoicesPage() {
             <div className="bg-white rounded-lg shadow-lg w-full max-w-xl p-6 space-y-4 relative">
               <button
                 className="absolute cursor-pointer top-2 right-3 text-gray-500 hover:text-gray-700"
-                onClick={() => setShowModal(false)}
+                onClick={closeModal}
               >
                 ✕
               </button>
-              <h2 className="text-2xl font-bold">Create New Invoice</h2>
+              <h2 className="text-2xl font-bold">
+                {editingInvoice ? "Edit Invoice" : "Create New Invoice"}
+              </h2>
               <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4">
                 {/* Business Select - NO CHANGE */}
                 <select
                   value={selectedBusiness}
-                  onChange={(e) => setSelectedBusiness(e.target.value)}
+                  onChange={(e) => {
+                    const newBusinessId = e.target.value;
+                    setSelectedBusiness(newBusinessId);
+                    // If business changes during an edit, or for a new form, reset client/products
+                    if (
+                      !editingInvoice ||
+                      (editingInvoice &&
+                        editingInvoice.business_id !== newBusinessId)
+                    ) {
+                      setSelectedClient(null);
+                      setSelectedProducts([]);
+                    }
+                  }}
                   required // Good to have
                   className="col-span-2 p-2 rounded-lg h-10 border text-sm"
                 >
@@ -831,7 +954,7 @@ export default function InvoicesPage() {
                     selectedProducts.length === 0
                   }
                 >
-                  Save Invoice
+                  {editingInvoice ? "Update Invoice" : "Save Invoice"}
                 </button>
               </form>
             </div>
@@ -843,12 +966,15 @@ export default function InvoicesPage() {
         ) : invoices.length > 0 ? (
           <div className="mt-6 border border-neutral-300 border-dashed rounded-xl p-4">
             <h2 className="text-xl font-semibold mb-4">Your Invoices</h2>
-            <div className="overflow-x-auto">
+            <div className="">
               <table className="min-w-full text-sm text-left">
-                <thead className="bg-gray-100 rounded">
+                <thead className="bg-gray-100">
                   <tr className="h-14">
-                    <th className="px-4 font-light text-gray-500 py-2">
+                    <th className="px-4 font-light text-gray-500 py-2 rounded-tl-lg">
                       Client Name
+                    </th>
+                    <th className="px-4 font-light text-gray-500 py-2">
+                      Email
                     </th>
                     <th className="px-4 font-light text-gray-500 py-2">
                       Service Count
@@ -860,8 +986,8 @@ export default function InvoicesPage() {
                       Total
                     </th>
                     <th className="px-4 font-light text-gray-500 py-2">Paid</th>
-                    <th className="px-4 font-light text-gray-500 py-2 rounded-tr-lg">
-                      Date
+                    <th className="px-4 font-light text-gray-500 py-2">Date</th>
+                    <th className="px-4 w-6 font-light text-gray-500 py-2 rounded-tr-lg">
                     </th>
                   </tr>
                 </thead>
@@ -873,6 +999,9 @@ export default function InvoicesPage() {
                     >
                       <td className="px-4 py-2">
                         {invoice.client?.name || "N/A"}
+                      </td>
+                      <td className="px-4 py-2">
+                        {invoice.client?.email   || "N/A"}
                       </td>
                       <td className="px-4 py-2">{invoice.product_count}</td>
                       <td className="px-4 py-2">
@@ -894,10 +1023,85 @@ export default function InvoicesPage() {
                           }
                         )}
                       </td>
+                      <td className="px-4 py-2 relative">
+                        {" "}
+                        {/* Added 'relative' for dropdown positioning */}
+                        <button
+                          onClick={() => toggleDropdown(invoice.id)}
+                          className="p-1 cursor-pointer rounded hover:bg-gray-200 text-gray-600"
+                          aria-haspopup="true"
+                          aria-expanded={activeDropdown === invoice.id}
+                        >
+                          <MoreVertical size={18} />
+                        </button>
+                        {activeDropdown === invoice.id && (
+                          <div className="absolute right-0 mt-1 w-32 bg-white rounded-md shadow-lg z-10 border border-gray-200">
+                            <ul className="py-1">
+                              <li>
+                                <button
+                                  onClick={() =>
+                                    openEditModalWithInvoice(invoice)
+                                  }
+                                  className="w-full cursor-pointer text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                >
+                                  Edit
+                                </button>
+                              </li>
+                              <li>
+                                <button
+                                  onClick={() =>
+                                    openDeleteConfirmation(invoice)
+                                  }
+                                  className="w-full cursor-pointer text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                                >
+                                  Delete
+                                </button>
+                              </li>
+                            </ul>
+                          </div>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              {showDeleteConfirmModal && invoiceToDelete && (
+                <div className="fixed inset-0 bg-[#000000aa] bg-opacity-75 flex items-center justify-center z-50">
+                  <div className="bg-white rounded-lg shadow-xl p-5 space-y-4 w-full max-w-md">
+                    <div className="flex justify-between items-center">
+                      <h3 className="text-lg font-semibold text-gray-800">
+                        Confirm Deletion
+                      </h3>
+                    </div>
+                    <p className="text-sm text-gray-600">
+                      Are you sure you want to delete the invoice for{" "}
+                      <strong>
+                        {invoiceToDelete.client?.name ||
+                          `Invoice #${invoiceToDelete.id}`}{" "}
+                        {invoiceToDelete.invoice?.total}
+                      </strong>
+                      ?
+                    </p>
+                    <p className="text-sm text-red-500">
+                      This action cannot be undone.
+                    </p>
+                    <div className="flex justify-end space-x-3">
+                      <button
+                        onClick={closeDeleteConfirmation}
+                        className="px-4 cursor-pointer py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => handleDeleteInvoice(invoiceToDelete.id)}
+                        className="px-4 cursor-pointer py-2 text-sm font-medium rounded-md bg-red-600 text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                      >
+                        Delete Invoice
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         ) : (
