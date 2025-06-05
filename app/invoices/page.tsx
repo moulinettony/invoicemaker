@@ -34,18 +34,18 @@ const InvoicePdf = ({ invoice }: { invoice: any }) => {
   }
   const totalTax = invoice.product
     .reduce((sum: number, prod: any) => {
-      const originalPrice = Number(prod.price || 0);
+      const lineItemOriginalValue =
+        Number(prod.price || 0) * Number(prod.quantity || 1); // Use quantity
       let itemEffectiveDiscount = 0;
 
-      // Distribute the actualDiscountAmount proportionally
       if (Number(invoice.subtotal || 0) > 0) {
-        // Avoid division by zero
+        // Ensure invoice.subtotal reflects sum of (price*qty)
         itemEffectiveDiscount =
-          (originalPrice / Number(invoice.subtotal || 0)) *
+          (lineItemOriginalValue / Number(invoice.subtotal || 0)) *
           actualDiscountAmount;
       }
 
-      const priceAfterDiscount = originalPrice - itemEffectiveDiscount;
+      const priceAfterDiscount = lineItemOriginalValue - itemEffectiveDiscount;
       const taxRate = Number(prod.tax || 0);
       return sum + (priceAfterDiscount * taxRate) / 100;
     }, 0)
@@ -211,17 +211,28 @@ const InvoicePdf = ({ invoice }: { invoice: any }) => {
           {invoice.product.map((prod: any, idx: any) => (
             <View
               key={idx}
-              style={[
-                styles.tableRow,
-                ...(idx % 2 === 1 ? [styles.altRow] : []),
-              ]}
+              style={
+                idx % 2 === 1
+                  ? [styles.tableRow, styles.altRow] // If condition is true, an array of two style objects
+                  : [styles.tableRow] // If false, an array with one style object (or just styles.tableRow)
+              }
             >
+              {/* ... rest of your cell content ... */}
               <Text style={styles.cell1}>{idx + 1}</Text>
               <View style={styles.cell2}>
                 <Text style={styles.bold}>{prod.name}</Text>
                 <Text>{prod.description}</Text>
               </View>
-              <Text style={styles.cell3}>{formatCurrency(prod.price)}</Text>
+              {/* Make sure you've updated this part for quantity as discussed before */}
+              <Text style={{ width: "10%", textAlign: "center" }}>
+                {prod.quantity}
+              </Text>
+              <Text style={{ width: "15%", textAlign: "right" }}>
+                {formatCurrency(prod.price)}
+              </Text>
+              <Text style={styles.cell3}>
+                {formatCurrency(prod.price * prod.quantity)}
+              </Text>
             </View>
           ))}
 
@@ -373,7 +384,7 @@ export default function InvoicesPage() {
   const [invoiceToDelete, setInvoiceToDelete] = useState<any | null>(null);
 
   const originalSubtotal = selectedProducts.reduce(
-    (sum, product) => sum + Number(product.price || 0),
+    (sum, product) => sum + Number(product.price || 0) * product.quantity,
     0
   );
   let discountAmount = 0;
@@ -390,16 +401,17 @@ export default function InvoicesPage() {
   const subtotalAfterDiscount = originalSubtotal - discountAmount;
 
   const totalTaxOnDiscountedItems = selectedProducts.reduce((sum, product) => {
-    const price = Number(product.price || 0);
+    const lineItemOriginalValue = Number(product.price || 0) * product.quantity;
     let itemEffectiveDiscount = 0;
 
     if (originalSubtotal > 0) {
-      // Avoid division by zero if no products
-      // Distribute the total invoice discount proportionally to each item's price
-      itemEffectiveDiscount = (price / originalSubtotal) * discountAmount;
+      // originalSubtotal is now sum of (price * quantity)
+      itemEffectiveDiscount =
+        (lineItemOriginalValue / originalSubtotal) * discountAmount;
     }
 
-    const priceAfterItemDiscount = price - itemEffectiveDiscount;
+    const priceAfterItemDiscount =
+      lineItemOriginalValue - itemEffectiveDiscount;
     const tax = Number(product.tax || 0);
     return sum + (priceAfterItemDiscount * tax) / 100;
   }, 0);
@@ -623,6 +635,7 @@ export default function InvoicesPage() {
     setDiscountValue(0);
     setEditingInvoice(null); // Crucial
   };
+
   const handleOpenModalForCreate = () => {
     resetForm(); // Call reset before showing
     setShowModal(true);
@@ -792,47 +805,96 @@ export default function InvoicesPage() {
                     Select Service(s):
                   </label>
                   {selectedBusiness && products.length > 0 ? (
-                    <div className="space-y-2 max-h-40 overflow-y-auto border p-2 rounded-md">
-                      {products.map((product) => (
-                        <div
-                          key={product.id}
-                          className="flex items-center gap-2"
-                        >
-                          <input
-                            type="checkbox"
-                            id={`product-${product.id}`}
-                            checked={selectedProducts.some(
-                              (p) => p.id === product.id
-                            )}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedProducts([
-                                  ...selectedProducts,
-                                  product,
-                                ]);
-                              } else {
-                                setSelectedProducts(
-                                  selectedProducts.filter(
-                                    (p) => p.id !== product.id
-                                  )
-                                );
-                              }
-                            }}
-                          />
-                          <label
-                            htmlFor={`product-${product.id}`}
-                            className="text-sm cursor-pointer"
+                    <div className="space-y-2 max-h-48 overflow-y-auto border p-2 rounded-md">
+                      {" "}
+                      {/* Increased max-h slightly */}
+                      {products.map((product) => {
+                        const selectedProductEntry = selectedProducts.find(
+                          (p) => p.id === product.id
+                        );
+                        const isChecked = !!selectedProductEntry;
+
+                        return (
+                          <div
+                            key={product.id}
+                            className="flex items-center justify-between gap-2 p-1 border-b border-gray-100 last:border-b-0" // Added some styling for each row
                           >
-                            <span className="font-semibold">
-                              {product.name}
-                            </span>{" "}
-                            ({product.price} MAD){" "}
-                            <span className="italic text-xs">
-                              +{product.tax}%
-                            </span>
-                          </label>
-                        </div>
-                      ))}
+                            <div className="flex items-center gap-2 flex-grow">
+                              {" "}
+                              {/* Checkbox and label take available space */}
+                              <input
+                                type="checkbox"
+                                id={`product-${product.id}`}
+                                checked={isChecked}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedProducts([
+                                      ...selectedProducts,
+                                      { ...product, quantity: 1 }, // Add product with default quantity 1
+                                    ]);
+                                  } else {
+                                    setSelectedProducts(
+                                      selectedProducts.filter(
+                                        (p) => p.id !== product.id
+                                      )
+                                    );
+                                  }
+                                }}
+                                className="form-checkbox h-4 w-4 text-blue-600"
+                              />
+                              <label
+                                htmlFor={`product-${product.id}`}
+                                className="text-sm cursor-pointer"
+                              >
+                                <span className="font-semibold">
+                                  {product.name}
+                                </span>{" "}
+                                ({product.price} MAD){" "}
+                                <span className="italic text-xs">
+                                  +{product.tax}%
+                                </span>
+                              </label>
+                            </div>
+                            {isChecked && ( // Show quantity input only if product is checked
+                              <div className="flex items-center gap-1">
+                                <label
+                                  htmlFor={`quantity-${product.id}`}
+                                  className="text-xs font-medium"
+                                >
+                                  Qty:
+                                </label>
+                                <input
+                                  type="number"
+                                  id={`quantity-${product.id}`}
+                                  value={selectedProductEntry.quantity}
+                                  min="1"
+                                  step="1"
+                                  onChange={(e) => {
+                                    const newQuantity = parseInt(
+                                      e.target.value,
+                                      10
+                                    );
+                                    setSelectedProducts(
+                                      selectedProducts.map((p) =>
+                                        p.id === product.id
+                                          ? {
+                                              ...p,
+                                              quantity:
+                                                newQuantity >= 1
+                                                  ? newQuantity
+                                                  : 1,
+                                            } // Ensure quantity is at least 1
+                                          : p
+                                      )
+                                    );
+                                  }}
+                                  className="w-16 p-1 h-7 rounded border text-sm text-center"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   ) : (
                     <p className="col-span-2 text-sm text-gray-500">
@@ -987,8 +1049,7 @@ export default function InvoicesPage() {
                     </th>
                     <th className="px-4 font-light text-gray-500 py-2">Paid</th>
                     <th className="px-4 font-light text-gray-500 py-2">Date</th>
-                    <th className="px-4 w-6 font-light text-gray-500 py-2 rounded-tr-lg">
-                    </th>
+                    <th className="px-4 w-6 font-light text-gray-500 py-2 rounded-tr-lg"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1001,7 +1062,7 @@ export default function InvoicesPage() {
                         {invoice.client?.name || "N/A"}
                       </td>
                       <td className="px-4 py-2">
-                        {invoice.client?.email   || "N/A"}
+                        {invoice.client?.email || "N/A"}
                       </td>
                       <td className="px-4 py-2">{invoice.product_count}</td>
                       <td className="px-4 py-2">
