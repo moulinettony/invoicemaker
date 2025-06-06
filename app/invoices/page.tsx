@@ -173,10 +173,12 @@ const InvoicePdf = ({ invoice }: { invoice: any }) => {
                   {invoice.client.email}
                 </Text>
               )}
-              <Text>
-                <Text style={styles.bold}>ICE: </Text>
-                {invoice.client.ice}
-              </Text>
+              {invoice.client.ice && (
+                <Text>
+                  <Text style={styles.bold}>ICE: </Text>
+                  {invoice.client.ice}
+                </Text>
+              )}
             </View>
             <View style={{ marginBottom: 40 }}>
               <Text
@@ -387,6 +389,7 @@ export default function InvoicesPage() {
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null); // To track which dropdown is open
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   const [invoiceToDelete, setInvoiceToDelete] = useState<any | null>(null);
+  const [invoiceDate, setInvoiceDate] = useState<string>("");
 
   const originalSubtotal = selectedProducts.reduce(
     (sum, product) => sum + Number(product.price || 0) * product.quantity,
@@ -595,6 +598,7 @@ export default function InvoicesPage() {
       business_id: selectedBusiness,
       product_count: selectedProducts.length,
       invoice_number: finalInvoiceNumber, // --- ADDED: Include the new number in the payload
+      created_at: new Date(invoiceDate).toISOString(),
     };
 
     let processedInvoice: any = null;
@@ -665,28 +669,33 @@ export default function InvoicesPage() {
     setEditingInvoice(null); // Crucial
   };
 
+const formatDateForInput = (date: Date | string) => {
+    return new Date(date).toISOString().split('T')[0];
+};
+
   const handleOpenModalForCreate = () => {
     resetForm(); // Call reset before showing
+    setInvoiceDate(formatDateForInput(new Date()));
     setShowModal(true);
   };
 
   const handleOpenModalForEdit = async (invoiceToEdit: any) => {
     setEditingInvoice(invoiceToEdit);
     setSelectedBusiness(invoiceToEdit.business_id); // Triggers client/product fetch
-
-    // Assuming invoiceToEdit.client is the full client object and
-    // invoiceToEdit.product is an array of full product objects
     setSelectedClient(invoiceToEdit.client);
     setSelectedProducts(invoiceToEdit.product || []);
     setPaid(invoiceToEdit.paid);
     setDiscountType(invoiceToEdit.discount_type || "percentage");
     setDiscountValue(invoiceToEdit.discount_value || 0);
+    setInvoiceDate(formatDateForInput(invoiceToEdit.created_at));
     setShowModal(true);
   };
 
   const closeModal = () => {
     setShowModal(false);
     resetForm();
+    setInvoiceDate(""); // <-- Add this
+    setEditingInvoice(null);
   };
 
   useEffect(() => {
@@ -772,33 +781,57 @@ export default function InvoicesPage() {
                 {editingInvoice ? "Edit Invoice" : "Create New Invoice"}
               </h2>
               <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4">
-                {/* Business Select - NO CHANGE */}
-                <select
-                  value={selectedBusiness}
-                  onChange={(e) => {
-                    const newBusinessId = e.target.value;
-                    setSelectedBusiness(newBusinessId);
-                    // If business changes during an edit, or for a new form, reset client/products
-                    if (
-                      !editingInvoice ||
-                      (editingInvoice &&
-                        editingInvoice.business_id !== newBusinessId)
-                    ) {
-                      setSelectedClient(null);
-                      setSelectedProducts([]);
-                    }
-                  }}
-                  required // Good to have
-                  className="col-span-2 p-2 rounded-lg h-10 border text-sm"
-                >
-                  <option value="">Select Business</option>
-                  {businesses.map((biz) => (
-                    <option key={biz.id} value={biz.id}>
-                      {biz.business_name}
-                    </option>
-                  ))}
-                </select>
+                <div className="w-full col-span-2">
+                  <label
+                    htmlFor="invoiceDate"
+                    className="block mb-1 text-sm font-semibold"
+                  >
+                    Invoice Date:
+                  </label>
+                  <input
+                    type="date"
+                    id="invoiceDate"
+                    value={invoiceDate}
+                    onChange={(e) => setInvoiceDate(e.target.value)}
+                    required
+                    className="w-full p-2 rounded-lg h-10 border text-sm"
+                  />
+                </div>
 
+                {/* Business Select - NO CHANGE */}
+                <div className="col-span-2 w-full">
+                  <label
+                    htmlFor="invoiceDate"
+                    className="block mb-1 text-sm font-semibold"
+                  >
+                    Invoice Business:
+                  </label>
+                  <select
+                    value={selectedBusiness}
+                    onChange={(e) => {
+                      const newBusinessId = e.target.value;
+                      setSelectedBusiness(newBusinessId);
+                      // If business changes during an edit, or for a new form, reset client/products
+                      if (
+                        !editingInvoice ||
+                        (editingInvoice &&
+                          editingInvoice.business_id !== newBusinessId)
+                      ) {
+                        setSelectedClient(null);
+                        setSelectedProducts([]);
+                      }
+                    }}
+                    required // Good to have
+                    className="w-full p-2 rounded-lg h-10 border text-sm"
+                  >
+                    <option value="">Select Business</option>
+                    {businesses.map((biz) => (
+                      <option key={biz.id} value={biz.id}>
+                        {biz.business_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 {/* Client Select - NO CHANGE */}
                 {selectedBusiness && clients.length > 0 && (
                   <select
