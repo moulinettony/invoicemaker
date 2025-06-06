@@ -74,10 +74,12 @@ const InvoicePdf = ({ invoice }: { invoice: any }) => {
     tableHeader: {
       flexDirection: "row",
       backgroundColor: "#A8DAFF",
-      paddingVertical: 6,
+      paddingTop: 6,
+      paddingBottom: 4,
       paddingHorizontal: 12,
       borderRadius: 9999,
       marginTop: 20,
+      fontSize: 10,
     },
     tableRow: {
       display: "flex",
@@ -91,8 +93,9 @@ const InvoicePdf = ({ invoice }: { invoice: any }) => {
       backgroundColor: "#eee",
     },
     cell1: { width: "10%" },
-    cell2: { width: "70%" },
-    cell3: { width: "20%", textAlign: "right" },
+    cell2: { width: "40%" },
+    cell3: { width: "10%", textAlign: "right" },
+    cell4: { width: "20%", textAlign: "right" },
     totalRow: {
       flexDirection: "row",
       justifyContent: "space-between",
@@ -158,14 +161,18 @@ const InvoicePdf = ({ invoice }: { invoice: any }) => {
               >
                 {invoice.client.name}
               </Text>
-              <Text style={{ maxWidth: 200, lineHeight: 0.7 }}>
-                <Text style={styles.bold}>Adresse: </Text>
-                {invoice.client.address}
-              </Text>
-              <Text>
-                <Text style={styles.bold}>Email: </Text>
-                {invoice.client.email || "-"}
-              </Text>
+              {invoice.client.address && (
+                <Text style={{ maxWidth: 200, lineHeight: 0.7 }}>
+                  <Text style={styles.bold}>Adresse: </Text>
+                  {invoice.client.address}
+                </Text>
+              )}
+              {invoice.client.email && (
+                <Text>
+                  <Text style={styles.bold}>Email: </Text>
+                  {invoice.client.email}
+                </Text>
+              )}
               <Text>
                 <Text style={styles.bold}>ICE: </Text>
                 {invoice.client.ice}
@@ -182,7 +189,7 @@ const InvoicePdf = ({ invoice }: { invoice: any }) => {
               >
                 Facture
               </Text>
-              <Text>Nº {Number(invoice.count || 0) + 100}</Text>
+              <Text>Nº {invoice.invoice_number || `DRAFT-${invoice.id}`}</Text>
               <Text>
                 Date :{" "}
                 {new Date(invoice.created_at).toLocaleDateString("fr-FR")}
@@ -205,7 +212,9 @@ const InvoicePdf = ({ invoice }: { invoice: any }) => {
           <View style={styles.tableHeader}>
             <Text style={styles.cell1}></Text>
             <Text style={styles.cell2}>Description</Text>
-            <Text style={styles.cell3}>Total (MAD)</Text>
+            <Text style={styles.cell4}>Prix HT</Text>
+            <Text style={styles.cell3}>QTE</Text>
+            <Text style={styles.cell4}>Total (MAD)</Text>
           </View>
 
           {invoice.product.map((prod: any, idx: any) => (
@@ -223,14 +232,10 @@ const InvoicePdf = ({ invoice }: { invoice: any }) => {
                 <Text style={styles.bold}>{prod.name}</Text>
                 <Text>{prod.description}</Text>
               </View>
+              <Text style={styles.cell4}>{formatCurrency(prod.price)}</Text>
               {/* Make sure you've updated this part for quantity as discussed before */}
-              <Text style={{ width: "10%", textAlign: "center" }}>
-                {prod.quantity}
-              </Text>
-              <Text style={{ width: "15%", textAlign: "right" }}>
-                {formatCurrency(prod.price)}
-              </Text>
-              <Text style={styles.cell3}>
+              <Text style={styles.cell3}>{prod.quantity}</Text>
+              <Text style={styles.cell4}>
                 {formatCurrency(prod.price * prod.quantity)}
               </Text>
             </View>
@@ -523,6 +528,35 @@ export default function InvoicesPage() {
       return;
     }
 
+    // --- ADDED: LOGIC TO GENERATE OR PRESERVE THE INVOICE NUMBER ---
+    let finalInvoiceNumber: string;
+
+    if (editingInvoice && editingInvoice.invoice_number) {
+      // If we are editing an invoice that already has a number, we keep it.
+      finalInvoiceNumber = editingInvoice.invoice_number;
+    } else {
+      // If this is a new invoice (or an old one without a number), generate a new one.
+      // 1. Get the count of existing invoices for this specific business to determine the next number.
+      const { count, error: countError } = await supabase
+        .from("invoice")
+        .select("*", { count: "exact", head: true }) // Efficiently gets only the count
+        .eq("business_id", selectedBusiness);
+
+      if (countError) {
+        console.error("Error fetching invoice count:", countError.message);
+        alert("Could not generate a new invoice number. Please try again.");
+        return;
+      }
+
+      // 2. The new count is the total number of existing invoices + 1.
+      const newCount = (count ?? 0) + 27;
+      const paddedCount = String(newCount).padStart(2, "0"); // e.g., 1 -> "01", 12 -> "12"
+      const currentYear = new Date().getFullYear().toString().slice(-2); // e.g., 2024 -> "24"
+
+      finalInvoiceNumber = `${currentYear}-${paddedCount}`; // e.g., "24-01"
+    }
+    // --- END OF ADDED CODE ---
+
     // Recalculate discountAmount and totals (your existing logic is good here)
     let finalDiscountAmount = 0;
     if (discountType === "percentage") {
@@ -551,7 +585,6 @@ export default function InvoicesPage() {
 
     // This is the payload for both insert and update
     const invoicePayload = {
-      // Renamed from invoiceData for clarity with my previous suggestions
       client: selectedClient,
       product: selectedProducts,
       subtotal: originalSubtotal,
@@ -561,6 +594,7 @@ export default function InvoicesPage() {
       paid,
       business_id: selectedBusiness,
       product_count: selectedProducts.length,
+      invoice_number: finalInvoiceNumber, // --- ADDED: Include the new number in the payload
     };
 
     let processedInvoice: any = null;
@@ -570,18 +604,18 @@ export default function InvoicesPage() {
       const { data, error: updateError } = await supabase
         .from("invoice")
         .update(invoicePayload)
-        .eq("id", editingInvoice.id) // Use the ID of the invoice being edited
+        .eq("id", editingInvoice.id)
         .select()
         .single();
       processedInvoice = data;
       Dberror = updateError;
     } else {
-      const { data: insertedData, error: insertError } = await supabase // Using your variable names
+      const { data: insertedData, error: insertError } = await supabase
         .from("invoice")
-        .insert(invoicePayload) // Use invoicePayload
+        .insert(invoicePayload)
         .select()
         .single();
-      processedInvoice = insertedData; // Use 'insertedData' as per your original
+      processedInvoice = insertedData;
       Dberror = insertError;
     }
 
@@ -591,26 +625,21 @@ export default function InvoicesPage() {
 
       const { data: business } = await supabase
         .from("business")
-        .select("*") // Select all necessary business fields for the PDF
-        .eq("id", selectedBusiness) // selectedBusiness should be correct from the form
+        .select("*")
+        .eq("id", selectedBusiness)
         .single();
 
+      // --- MODIFIED: Simplified the PDF data object ---
+      // The `processedInvoice` object from Supabase now contains ALL the necessary data,
+      // including the correct `invoice_number`. We no longer need the complex `count` logic here.
       const fullInvoiceForPdf = {
-        ...processedInvoice, // This now contains all fields of the saved/updated invoice
+        ...processedInvoice, // This contains the invoice data just saved/updated.
         // Add business details needed by InvoicePdf component
         business_name: business?.business_name,
         business_address: business?.business_address,
         city: business?.city,
         business_email: business?.business_email,
         business_ice: business?.business_ice,
-        // Ensure 'count' is handled for PDF.
-        // If 'count' was a sequential number from DB for new invoices, it might be part of 'processedInvoice'.
-        // If not, or for updated invoices, you might use 'id' or another identifier.
-        // The example below assumes 'count' might be in processedInvoice or defaults.
-        count:
-          processedInvoice.count !== undefined
-            ? processedInvoice.count
-            : (Number(processedInvoice.id) || 0) + 100,
       };
 
       const blob = await pdf(
