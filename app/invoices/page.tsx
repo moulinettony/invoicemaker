@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { Plus, MoreVertical } from "lucide-react";
+import { Plus, MoreVertical, FileText } from "lucide-react";
 import {
   Document,
   Page,
@@ -525,24 +525,22 @@ export default function InvoicesPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+  await supabase.auth.getSession(); 
 
     if (!selectedBusiness || !selectedClient || selectedProducts.length === 0) {
       alert("Please select a business, client, and at least one service.");
       return;
     }
 
-    // --- ADDED: LOGIC TO GENERATE OR PRESERVE THE INVOICE NUMBER ---
+    // --- LOGIC TO GENERATE OR PRESERVE THE INVOICE NUMBER (No changes here) ---
     let finalInvoiceNumber: string;
 
     if (editingInvoice && editingInvoice.invoice_number) {
-      // If we are editing an invoice that already has a number, we keep it.
       finalInvoiceNumber = editingInvoice.invoice_number;
     } else {
-      // If this is a new invoice (or an old one without a number), generate a new one.
-      // 1. Get the count of existing invoices for this specific business to determine the next number.
       const { count, error: countError } = await supabase
         .from("invoice")
-        .select("*", { count: "exact", head: true }) // Efficiently gets only the count
+        .select("*", { count: "exact", head: true })
         .eq("business_id", selectedBusiness);
 
       if (countError) {
@@ -550,23 +548,18 @@ export default function InvoicesPage() {
         alert("Could not generate a new invoice number. Please try again.");
         return;
       }
-
-      // 2. The new count is the total number of existing invoices + 1.
       const newCount = (count ?? 0) + 27;
-      const paddedCount = String(newCount).padStart(2, "0"); // e.g., 1 -> "01", 12 -> "12"
-      const currentYear = new Date().getFullYear().toString().slice(-2); // e.g., 2024 -> "24"
-
-      finalInvoiceNumber = `${currentYear}-${paddedCount}`; // e.g., "24-01"
+      const paddedCount = String(newCount).padStart(2, "0");
+      const currentYear = new Date().getFullYear().toString().slice(-2);
+      finalInvoiceNumber = `${currentYear}-${paddedCount}`;
     }
-    // --- END OF ADDED CODE ---
 
-    // Recalculate discountAmount and totals (your existing logic is good here)
+    // --- Recalculate totals (No changes here) ---
     let finalDiscountAmount = 0;
     if (discountType === "percentage") {
       finalDiscountAmount =
         originalSubtotal * (Number(discountValue || 0) / 100);
     } else {
-      // Fixed amount
       finalDiscountAmount = Number(discountValue || 0);
       if (finalDiscountAmount > originalSubtotal) {
         finalDiscountAmount = originalSubtotal;
@@ -574,19 +567,93 @@ export default function InvoicesPage() {
     }
     const finalSubtotalAfterDiscount = originalSubtotal - finalDiscountAmount;
     const finalTotalTax = selectedProducts.reduce((sum, product) => {
-      const price = Number(product.price || 0);
+      // NOTE: Your original code had a small bug here. It should use product.quantity. I've fixed it.
+      const lineItemOriginalValue =
+        Number(product.price || 0) * product.quantity;
       let itemEffectiveDiscount = 0;
+
       if (originalSubtotal > 0) {
         itemEffectiveDiscount =
-          (price / originalSubtotal) * finalDiscountAmount;
+          (lineItemOriginalValue / originalSubtotal) * finalDiscountAmount;
       }
-      const priceAfterItemDiscount = price - itemEffectiveDiscount;
+
+      const priceAfterItemDiscount =
+        lineItemOriginalValue - itemEffectiveDiscount;
       const tax = Number(product.tax || 0);
       return sum + (priceAfterItemDiscount * tax) / 100;
     }, 0);
     const finalTotal = finalSubtotalAfterDiscount + finalTotalTax;
 
-    // This is the payload for both insert and update
+    // ===================================================================
+    // === START: NEW PDF UPLOAD LOGIC ===================================
+    // ===================================================================
+
+    // 1. First, prepare all the data needed for the PDF.
+    const { data: business } = await supabase
+      .from("business")
+      .select("*")
+      .eq("id", selectedBusiness)
+      .single();
+
+    // Create the complete invoice object for the PDF template
+    const fullInvoiceForPdf = {
+      client: selectedClient,
+      product: selectedProducts,
+      subtotal: originalSubtotal,
+      discount_type: discountType,
+      discount_value: Number(discountValue || 0),
+      total: finalTotal,
+      paid,
+      business_id: selectedBusiness,
+      product_count: selectedProducts.length,
+      invoice_number: finalInvoiceNumber,
+      created_at: new Date(invoiceDate).toISOString(),
+      business_name: business?.business_name,
+      business_address: business?.business_address,
+      city: business?.city,
+      business_email: business?.business_email,
+      business_ice: business?.business_ice,
+    };
+
+    // 2. Generate the PDF as a blob.
+    const blob = await pdf(<InvoicePdf invoice={fullInvoiceForPdf} />).toBlob();
+
+    // 3. Define a unique file path for the upload.
+   const uniqueSuffix = Date.now(); // Gets a unique number like 1678886400000
+const filePath = `${selectedBusiness}/${finalInvoiceNumber}-${uniqueSuffix}.pdf`;
+
+    // 4. Upload the PDF to Supabase Storage.
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from("invoice") // Your bucket name
+      .upload(filePath, blob, {
+        cacheControl: "3600",
+        upsert: true, // Overwrites the file if it exists, useful for edits.
+      });
+
+    // 5. Handle upload errors with detailed logging.
+    if (uploadError) {
+      console.error("--- PDF UPLOAD FAILED ---");
+      console.error("File Path Attempted:", filePath);
+      console.error("Full Supabase Error:", uploadError); // Logs the entire error object
+      alert(
+        `Failed to save the PDF. Check the browser console for details. Error: ${uploadError.message}`
+      );
+      return; // Stop the process if the PDF upload fails.
+    }
+
+    // 6. Get the public URL of the successfully uploaded file.
+    const { data: urlData } = supabase.storage
+      .from("invoice")
+      .getPublicUrl(filePath);
+
+    const pdfPublicUrl = urlData.publicUrl;
+
+    // =================================================================
+    // === END: NEW PDF UPLOAD LOGIC =====================================
+    // =================================================================
+
+    // This is the payload for both insert and update.
+    // It now includes the pdf_url.
     const invoicePayload = {
       client: selectedClient,
       product: selectedProducts,
@@ -597,13 +664,15 @@ export default function InvoicesPage() {
       paid,
       business_id: selectedBusiness,
       product_count: selectedProducts.length,
-      invoice_number: finalInvoiceNumber, // --- ADDED: Include the new number in the payload
+      invoice_number: finalInvoiceNumber,
       created_at: new Date(invoiceDate).toISOString(),
+      pdf_url: pdfPublicUrl, // <-- ADDED
     };
 
     let processedInvoice: any = null;
     let Dberror: any = null;
 
+    // Save the invoice data to the 'invoice' table.
     if (editingInvoice) {
       const { data, error: updateError } = await supabase
         .from("invoice")
@@ -623,39 +692,18 @@ export default function InvoicesPage() {
       Dberror = insertError;
     }
 
+    // Final success/error handling
     if (!Dberror && processedInvoice) {
       closeModal();
       fetchUserInvoices(); // Refresh the list of invoices
 
-      const { data: business } = await supabase
-        .from("business")
-        .select("*")
-        .eq("id", selectedBusiness)
-        .single();
-
-      // --- MODIFIED: Simplified the PDF data object ---
-      // The `processedInvoice` object from Supabase now contains ALL the necessary data,
-      // including the correct `invoice_number`. We no longer need the complex `count` logic here.
-      const fullInvoiceForPdf = {
-        ...processedInvoice, // This contains the invoice data just saved/updated.
-        // Add business details needed by InvoicePdf component
-        business_name: business?.business_name,
-        business_address: business?.business_address,
-        city: business?.city,
-        business_email: business?.business_email,
-        business_ice: business?.business_ice,
-      };
-
-      const blob = await pdf(
-        <InvoicePdf invoice={fullInvoiceForPdf} />
-      ).toBlob();
-      const url = URL.createObjectURL(blob);
-      window.open(url);
+      // Open the *stored* PDF in a new tab for the user.
+      window.open(pdfPublicUrl);
     } else {
-      // Handle error
+      // Handle database save error
       const action = editingInvoice ? "updating" : "saving";
-      console.error(`Error ${action} invoice:`, Dberror?.message);
-      alert(`Error ${action} invoice: ${Dberror?.message}`);
+      console.error(`Error ${action} invoice in database:`, Dberror?.message);
+      alert(`Error ${action} invoice in database: ${Dberror?.message}`);
     }
   };
 
@@ -669,9 +717,9 @@ export default function InvoicesPage() {
     setEditingInvoice(null); // Crucial
   };
 
-const formatDateForInput = (date: Date | string) => {
-    return new Date(date).toISOString().split('T')[0];
-};
+  const formatDateForInput = (date: Date | string) => {
+    return new Date(date).toISOString().split("T")[0];
+  };
 
   const handleOpenModalForCreate = () => {
     resetForm(); // Call reset before showing
@@ -1110,6 +1158,7 @@ const formatDateForInput = (date: Date | string) => {
                       Total
                     </th>
                     <th className="px-4 font-light text-gray-500 py-2">Paid</th>
+                    <th className="px-4 font-light text-gray-500 py-2">PDF</th>
                     <th className="px-4 font-light text-gray-500 py-2">Date</th>
                     <th className="px-4 w-6 font-light text-gray-500 py-2 rounded-tr-lg"></th>
                   </tr>
@@ -1135,6 +1184,19 @@ const formatDateForInput = (date: Date | string) => {
                       </td>
                       <td className="px-4 py-2">
                         {invoice.paid ? "Yes" : "No"}
+                      </td>
+                      <td className="px-4 py-2">
+                        {invoice.pdf_url && ( // Only show link if pdf_url exists
+                          <a
+                            href={invoice.pdf_url}
+                            target="_blank" // Opens the PDF in a new tab
+                            rel="noopener noreferrer"
+                            title="View PDF"
+                            className="flex items-center gap-1 rounded hover:underline text-blue-600"
+                          >
+                            <FileText size={18} />{invoice.invoice_number}
+                          </a>
+                        )}
                       </td>
                       <td className="px-4 py-2">
                         {new Date(invoice.created_at).toLocaleDateString(
