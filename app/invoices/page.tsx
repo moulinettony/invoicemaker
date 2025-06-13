@@ -548,7 +548,7 @@ export default function InvoicesPage() {
         alert("Could not generate a new invoice number. Please try again.");
         return;
       }
-      const newCount = (count ?? 0) + 27;
+      const newCount = (count ?? 0) + 28;
       const paddedCount = String(newCount).padStart(2, "0");
       const currentYear = new Date().getFullYear().toString().slice(-2);
       finalInvoiceNumber = `${currentYear}-${paddedCount}`;
