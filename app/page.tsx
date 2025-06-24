@@ -10,19 +10,40 @@ export default function LoginPage() {
   const [checkingSession, setCheckingSession] = useState(true);
 
   useEffect(() => {
-    const checkSession = async () => {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const user = sessionData.session?.user;
+    let isMounted = true;
 
-      if (user) {
-        router.push("/home"); // 🔁 Already logged in, go to home
-      } else {
-        setCheckingSession(false); // Show login form
+    const checkSession = async () => {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const user = sessionData.session?.user;
+
+        if (user && isMounted) {
+          router.replace("/home"); // Use replace instead of push for cleaner navigation
+        } else if (isMounted) {
+          setCheckingSession(false);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setMessage("Error checking session");
+          setCheckingSession(false);
+        }
       }
     };
 
     checkSession();
+
+    return () => {
+      isMounted = false; // Cleanup to prevent state updates after unmount
+    };
   }, [router]);
+
+  if (checkingSession) {
+    return (
+      <div className="flex w-screen min-h-screen items-center justify-center bg-[#141414]">
+        <div className="w-16 h-16 border-t-4 border-blue-500 border-solid rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   const handleOAuthLogin = async (provider: "google" | "apple") => {
     await supabase.auth.signInWithOAuth({
