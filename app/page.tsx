@@ -18,7 +18,10 @@ export default function LoginPage() {
         const user = sessionData.session?.user;
 
         if (user && isMounted) {
-          router.replace("/home"); // Use replace instead of push for cleaner navigation
+          const params = new URLSearchParams(window.location.search);
+          const returnTo = params.get("return_to");
+          const redirectPath = returnTo || "/home";
+          router.replace(redirectPath);
         } else if (isMounted) {
           setCheckingSession(false);
         }
@@ -78,17 +81,14 @@ export default function LoginPage() {
             />
           </div>
           <div>
-            <button
-              className="w-full cursor-pointer bg-[#303030] border border-gray-500 outline outline-[#303030] outline-[0.3px] text-white px-4 py-2 rounded-md shadow-sm hover:bg-neutral-900 focus:outline-none"
-            >
+            <button className="w-full cursor-pointer bg-[#303030] border border-gray-500 outline outline-[#303030] outline-[0.3px] text-white px-4 py-2 rounded-md shadow-sm hover:bg-neutral-900 focus:outline-none">
               Continue with email
             </button>
             <a
               href="#"
               className="w-full cursor-pointer mt-2 px-4 flex gap-2 justify-center text-sm py-[10px] rounded-md bg-neutral-100 hover:bg-neutral-200 focus:outline-none"
             >
-              <span>
-              </span>
+              <span></span>
               Sign in with passkey
             </a>
           </div>
@@ -104,27 +104,31 @@ export default function LoginPage() {
               onClick={() => handleOAuthLogin("google")}
               className="flex cursor-pointer items-center justify-center w-full bg-neutral-100 text-white p-4 rounded-md hover:bg-neutral-200"
             >
-              <img src="https://dbzxjogjhqzxtebpvhre.supabase.co/storage/v1/object/public/images//google.svg" alt="Google" className="h-5 w-5 mr-2" />
+              <img
+                src="https://dbzxjogjhqzxtebpvhre.supabase.co/storage/v1/object/public/images//google.svg"
+                alt="Google"
+                className="h-5 w-5 mr-2"
+              />
             </button>
             <button
               onClick={() => handleOAuthLogin("apple")}
               className="flex cursor-pointer items-center justify-center w-full bg-neutral-100 text-white p-4 rounded-md hover:bg-neutral-200"
             >
-              <img src="https://dbzxjogjhqzxtebpvhre.supabase.co/storage/v1/object/public/images//apple.svg" alt="Apple" className="h-5 w-5 mr-2" />
+              <img
+                src="https://dbzxjogjhqzxtebpvhre.supabase.co/storage/v1/object/public/images//apple.svg"
+                alt="Apple"
+                className="h-5 w-5 mr-2"
+              />
             </button>
           </div>
         </div>
 
         <p className="my-8 text-xs font-light">
           New User
-          <a
-            href="#"
-            className="ml-2 text-blue-500 hover:underline"
-          >
+          <a href="#" className="ml-2 text-blue-500 hover:underline">
             Get started →
           </a>
         </p>
-
 
         {message && (
           <p className="text-center text-sm text-gray-600">{message}</p>
