@@ -1,18 +1,17 @@
 "use client";
 
-import { useEffect, useState, FormEvent } from "react";
+import { useEffect, useState, FormEvent } from "react"; // Added FormEvent
 import { supabase } from "@/lib/supabase";
-import { Plus, MoreVertical, X } from "lucide-react";
+import { Plus, MoreVertical, X } from "lucide-react"; // Added MoreVertical and X for icons
 
-type Client = {
+type Product = {
   id: string;
   name: string;
-  email: string;
-  mobile: string;
-  address: string;
-  ice: string;
+  description: string;
+  price: number;
+  tax: number;
   created_at: string;
-  business_id: string; // Ensure business_id is part of the Client type
+  business_id: string; // Ensure business_id is part of the Product type
 };
 
 type Business = {
@@ -20,30 +19,29 @@ type Business = {
   business_name: string;
 };
 
-export default function ClientsPage() {
-  const [clients, setClients] = useState<Client[]>([]);
+export default function ProductsPage() { // Renamed to follow PascalCase convention
+  const [products, setProducts] = useState<Product[]>([]); // Renamed for consistency
   const [showModal, setShowModal] = useState(false);
-  const [businesses, setBusinesses] = useState<Business[]>([]);
+  const [businesses, setBusinesses] = useState<Business[]>([]); // Typed Business
 
   // --- State for Form Inputs ---
-  const [clientName, setClientName] = useState("");
-  const [clientEmail, setClientEmail] = useState("");
-  const [clientMobile, setClientMobile] = useState("");
-  const [clientAddress, setClientAddress] = useState("");
-  const [clientIce, setClientIce] = useState("");
+  const [productName, setProductName] = useState("");
+  const [productDescription, setProductDescription] = useState("");
+  const [productPrice, setProductPrice] = useState<number | string>(""); // Allow string for input, parse to number on submit
+  const [productTax, setProductTax] = useState<number | string>("");
   const [selectedBusinessId, setSelectedBusinessId] = useState<string>("");
 
   // --- State for Editing ---
-  const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
   // --- State for Dropdown and Delete Confirmation ---
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
-  const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
 
-  const fetchClientsAndBusinesses = async () => {
+  const fetchProductsAndBusinesses = async () => {
     setIsLoading(true);
     const { data: sessionData } = await supabase.auth.getSession();
     const user = sessionData.session?.user;
@@ -59,140 +57,135 @@ export default function ClientsPage() {
 
       if (businessData && businessData.length > 0) {
         const businessIds = businessData.map((b) => b.id);
-        const { data: clientData, error: clientError } = await supabase
-          .from("client")
+        const { data: productData, error: productError } = await supabase
+          .from("product")
           .select("*")
           .in("business_id", businessIds)
-          .order("created_at", { ascending: false });
+          .order("created_at", { ascending: false }); // Optional: order products
 
-        if (clientError) console.error("Error fetching clients:", clientError);
-        setClients(clientData || []);
+        if (productError) console.error("Error fetching products:", productError);
+        setProducts(productData || []);
       } else {
-        setClients([]);
+        setProducts([]); // No businesses, so no products
       }
     } else {
       setBusinesses([]);
-      setClients([]);
+      setProducts([]);
     }
     setIsLoading(false);
   };
 
   useEffect(() => {
-    fetchClientsAndBusinesses();
+    fetchProductsAndBusinesses();
   }, []);
 
   const resetForm = () => {
-    setClientName("");
-    setClientEmail("");
-    setClientMobile("");
-    setClientAddress("");
-    setClientIce("");
-    setSelectedBusinessId(businesses.length > 0 ? businesses[0].id : "");
-    setEditingClient(null);
+    setProductName("");
+    setProductDescription("");
+    setProductPrice("");
+    setProductTax("");
+    setSelectedBusinessId(businesses.length > 0 ? businesses[0].id : ""); // Default to first business or empty
+    setEditingProduct(null);
   };
 
   const handleOpenModalForCreate = () => {
     resetForm();
-     if (businesses.length > 0 && !selectedBusinessId) {
+    if (businesses.length > 0 && !selectedBusinessId) { // Pre-select first business if none selected
         setSelectedBusinessId(businesses[0].id);
     }
     setShowModal(true);
   };
 
-  const handleOpenModalForEdit = (client: Client) => {
-    setEditingClient(client);
-    setClientName(client.name);
-    setClientEmail(client.email || "");
-    setClientMobile(client.mobile || "");
-    setClientAddress(client.address || "");
-    setClientIce(client.ice || "");
-    setSelectedBusinessId(client.business_id);
+  const handleOpenModalForEdit = (product: Product) => {
+    setEditingProduct(product);
+    setProductName(product.name);
+    setProductDescription(product.description || "");
+    setProductPrice(product.price);
+    setProductTax(product.tax);
+    setSelectedBusinessId(product.business_id);
     setShowModal(true);
-    setActiveDropdown(null);
+    setActiveDropdown(null); // Close dropdown
   };
 
   const closeModal = () => {
     setShowModal(false);
-    resetForm();
+    resetForm(); // Also resets editingProduct
   };
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (!selectedBusinessId) {
-      alert("Please select a business for the client.");
+      alert("Please select a business.");
       return;
     }
-    if (!clientName.trim()) {
-        alert("Client name is required.");
-        return;
-    }
 
-    const clientDataPayload = {
-      name: clientName,
-      email: clientEmail,
-      mobile: clientMobile,
-      address: clientAddress,
-      ice: clientIce,
+    const productDataPayload = {
+      name: productName,
+      description: productDescription,
+      price: Number(productPrice) || 0,
+      tax: Number(productTax) || 0,
       business_id: selectedBusinessId,
     };
 
     let Dberror = null;
 
-    if (editingClient) {
+    if (editingProduct) {
+      // Update existing product
       const { error } = await supabase
-        .from("client")
-        .update(clientDataPayload)
-        .eq("id", editingClient.id);
+        .from("product")
+        .update(productDataPayload)
+        .eq("id", editingProduct.id);
       Dberror = error;
     } else {
+      // Create new product
       const { error } = await supabase
-        .from("client")
-        .insert(clientDataPayload);
+        .from("product")
+        .insert(productDataPayload);
       Dberror = error;
     }
 
     if (!Dberror) {
       closeModal();
-      fetchClientsAndBusinesses();
+      fetchProductsAndBusinesses();
     } else {
-      console.error("Error saving client:", Dberror.message);
-      alert(`Error saving client: ${Dberror.message}`);
+      console.error("Error saving product:", Dberror.message);
+      alert(`Error saving product: ${Dberror.message}`);
     }
   };
 
   // --- Delete Logic ---
-  const handleDeleteClient = async (clientId: string) => {
-    if (!clientId) return;
+  const handleDeleteProduct = async (productId: string) => {
+    if (!productId) return;
 
     const { error } = await supabase
-      .from("client")
+      .from("product")
       .delete()
-      .eq("id", clientId);
+      .eq("id", productId);
 
     if (error) {
-      console.error("Error deleting client:", error.message);
-      alert(`Error deleting client: ${error.message}`);
+      console.error("Error deleting product:", error.message);
+      alert(`Error deleting product: ${error.message}`);
     } else {
-      fetchClientsAndBusinesses();
+      fetchProductsAndBusinesses();
       setShowDeleteConfirmModal(false);
-      setClientToDelete(null);
+      setProductToDelete(null);
     }
   };
 
-  const openDeleteConfirmation = (client: Client) => {
-    setClientToDelete(client);
+  const openDeleteConfirmation = (product: Product) => {
+    setProductToDelete(product);
     setShowDeleteConfirmModal(true);
-    setActiveDropdown(null);
+    setActiveDropdown(null); // Close dropdown
   };
 
   const closeDeleteConfirmation = () => {
     setShowDeleteConfirmModal(false);
-    setClientToDelete(null);
+    setProductToDelete(null);
   };
 
-  const toggleDropdown = (clientId: string) => {
-    setActiveDropdown(activeDropdown === clientId ? null : clientId);
+  const toggleDropdown = (productId: string) => {
+    setActiveDropdown(activeDropdown === productId ? null : productId);
   };
 
 
@@ -202,12 +195,12 @@ export default function ClientsPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-4">
           <div className="relative border border-neutral-300 border-dashed rounded-xl p-4">
             <Plus className="absolute right-4 top-4 h-8 w-8 text-neutral-700 p-2 rounded bg-neutral-100" />
-            <h2 className="text-sm font-semibold">Add New Client</h2>
+            <h2 className="text-sm font-semibold">Add New Service</h2>
             <button
               onClick={handleOpenModalForCreate}
               className="mt-8 cursor-pointer px-4 py-2 w-full font-semibold text-sm bg-blue-700 text-white rounded-lg hover:bg-blue-800"
             >
-              Add Client
+              Add Service
             </button>
           </div>
         </div>
@@ -219,19 +212,19 @@ export default function ClientsPage() {
                 className="absolute cursor-pointer top-3 right-3 text-gray-500 hover:text-gray-700"
                 onClick={closeModal}
               >
-                <X size={20}/>
+                <X size={20} />
               </button>
               <h2 className="text-xl font-bold">
-                {editingClient ? "Edit Client" : "Create New Client"}
+                {editingProduct ? "Edit Service" : "Create New Service"}
               </h2>
               <form
                 className="grid grid-cols-1 sm:grid-cols-2 gap-4"
                 onSubmit={handleSubmit}
               >
                 <div className="sm:col-span-2">
-                  <label htmlFor="business_id_client" className="block text-sm font-medium text-gray-700 mb-1">Assign to Business</label>
+                  <label htmlFor="business_id" className="block text-sm font-medium text-gray-700 mb-1">Business</label>
                   <select
-                    id="business_id_client"
+                    id="business_id"
                     name="business_id"
                     value={selectedBusinessId}
                     onChange={(e) => setSelectedBusinessId(e.target.value)}
@@ -246,64 +239,57 @@ export default function ClientsPage() {
                     ))}
                   </select>
                   {businesses.length === 0 && !isLoading && (
-                     <p className="text-xs text-gray-500 mt-1">No businesses found. Please add a business first to assign clients.</p>
+                     <p className="text-xs text-gray-500 mt-1">No businesses found. Please add a business first.</p>
                   )}
                 </div>
 
-                <div>
-                  <label htmlFor="client_name" className="block text-sm font-medium text-gray-700 mb-1">Client Name</label>
+                <div className="sm:col-span-2">
+                  <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">Service Name</label>
                   <input
-                    id="client_name"
+                    id="name"
                     name="name"
-                    placeholder="e.g., John Doe"
-                    value={clientName}
-                    onChange={(e) => setClientName(e.target.value)}
+                    placeholder="e.g., Web Design"
+                    value={productName}
+                    onChange={(e) => setProductName(e.target.value)}
                     className="p-2 rounded-lg h-10 bg-blue-50 text-sm w-full"
                     required
                   />
                 </div>
                 <div>
-                  <label htmlFor="client_email" className="block text-sm font-medium text-gray-700 mb-1">Email (Optional)</label>
+                  <label htmlFor="price" className="block text-sm font-medium text-gray-700 mb-1">Price (MAD)</label>
                   <input
-                    id="client_email"
-                    name="email"
-                    type="email"
-                    placeholder="e.g., john.doe@example.com"
-                    value={clientEmail}
-                    onChange={(e) => setClientEmail(e.target.value)}
+                    id="price"
+                    name="price"
+                    type="number"
+                    placeholder="e.g., 1500"
+                    value={productPrice}
+                    onChange={(e) => setProductPrice(e.target.value)}
                     className="p-2 rounded-lg h-10 bg-blue-50 text-sm w-full"
+                    min="0"
+                    step="100"
                   />
                 </div>
                 <div>
-                  <label htmlFor="client_mobile" className="block text-sm font-medium text-gray-700 mb-1">Mobile (Optional)</label>
+                  <label htmlFor="tax" className="block text-sm font-medium text-gray-700 mb-1">Tax (%)</label>
                   <input
-                    id="client_mobile"
-                    name="mobile"
-                    placeholder="e.g., +1234567890"
-                    value={clientMobile}
-                    onChange={(e) => setClientMobile(e.target.value)}
+                    id="tax"
+                    name="tax"
+                    type="number"
+                    placeholder="e.g., 20"
+                    value={productTax}
+                    onChange={(e) => setProductTax(e.target.value)}
                     className="p-2 rounded-lg h-10 bg-blue-50 text-sm w-full"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="client_ice" className="block text-sm font-medium text-gray-700 mb-1">ICE (Optional)</label>
-                  <input
-                    id="client_ice"
-                    name="ice"
-                    placeholder="Client's ICE number"
-                    value={clientIce}
-                    onChange={(e) => setClientIce(e.target.value)}
-                    className="p-2 rounded-lg h-10 bg-blue-50 text-sm w-full"
+                    min="0"
                   />
                 </div>
                 <div className="sm:col-span-2">
-                  <label htmlFor="client_address" className="block text-sm font-medium text-gray-700 mb-1">Address (Optional)</label>
+                  <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">Description (Optional)</label>
                   <textarea
-                    id="client_address"
-                    name="address"
-                    placeholder="Client's full address"
-                    value={clientAddress}
-                    onChange={(e) => setClientAddress(e.target.value)}
+                    id="description"
+                    name="description"
+                    placeholder="Detailed description of the service"
+                    value={productDescription}
+                    onChange={(e) => setProductDescription(e.target.value)}
                     className="p-2 rounded-lg bg-blue-50 text-sm w-full min-h-[60px]"
                     rows={3}
                   />
@@ -312,7 +298,7 @@ export default function ClientsPage() {
                   type="submit"
                   className="sm:col-span-2 mt-2 cursor-pointer border border-blue-600 text-blue-600 py-2.5 rounded-lg hover:bg-blue-50 font-semibold"
                 >
-                  {editingClient ? "Update Client" : "Save Client"}
+                  {editingProduct ? "Update Service" : "Save Service"}
                 </button>
               </form>
             </div>
@@ -320,54 +306,52 @@ export default function ClientsPage() {
         )}
 
         {isLoading ? (
-            <p className="font-light text-gray-500 mt-6 text-center">Loading clients...</p>
-        ): clients.length > 0 ? (
+             <p className="font-light text-gray-500 mt-6 text-center">Loading services...</p>
+        ) : products.length > 0 ? (
           <div className="mt-6 border border-neutral-300 border-dashed rounded-xl p-4">
-            <h2 className="text-xl font-semibold mb-4">Your Clients</h2>
+            <h2 className="text-xl font-semibold mb-4">Your services</h2>
             <div className="">
               <table className="min-w-full text-sm text-left">
                 <thead className="bg-gray-100 rounded">
                   <tr className="h-14">
                     <th className="px-4 font-light text-gray-500 py-2 rounded-tl-lg">Name</th>
-                    <th className="px-4 font-light text-gray-500 py-2">Email</th>
-                    <th className="px-4 font-light text-gray-500 py-2">Mobile</th>
-                    <th className="px-4 font-light text-gray-500 py-2">ICE</th>
+                    <th className="px-4 font-light text-gray-500 py-2">Price</th>
+                    <th className="px-4 font-light text-gray-500 py-2">Tax</th>
                     <th className="px-4 font-light text-gray-500 py-2">Business</th>
                     <th className="px-4 font-light text-gray-500 py-2">Date</th>
                     <th className="px-4 font-light text-gray-500 py-2 rounded-tr-lg text-right"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {clients.map((client) => {
-                     const businessName = businesses.find(b => b.id === client.business_id)?.business_name || "N/A";
-                     return (
+                  {products.map((product) => {
+                    const businessName = businesses.find(b => b.id === product.business_id)?.business_name || "N/A";
+                    return (
                     <tr
-                      key={client.id}
+                      key={product.id}
                       className="h-14 border-b border-neutral-200 hover:bg-gray-50"
                     >
-                      <td className="px-4 py-2 font-medium text-gray-800">{client.name}</td>
-                      <td className="px-4 py-2">{client.email || "-"}</td>
-                      <td className="px-4 py-2">{client.mobile || "-"}</td>
-                      <td className="px-4 py-2">{client.ice || "-"}</td>
+                      <td className="px-4 py-2 font-medium text-gray-800">{product.name}</td>
+                      <td className="px-4 py-2">{product.price?.toFixed(2)} MAD</td>
+                      <td className="px-4 py-2">{product.tax}%</td>
                       <td className="px-4 py-2">{businessName}</td>
                       <td className="px-4 py-2">
-                        {new Date(client.created_at).toLocaleDateString("fr-FR")}
+                        {new Date(product.created_at).toLocaleDateString("fr-FR")}
                       </td>
                       <td className="px-4 py-2 relative text-right">
                         <button
-                          onClick={() => toggleDropdown(client.id)}
+                          onClick={() => toggleDropdown(product.id)}
                           className="p-1 cursor-pointer rounded hover:bg-gray-200 text-gray-600"
                           aria-haspopup="true"
-                          aria-expanded={activeDropdown === client.id}
+                          aria-expanded={activeDropdown === product.id}
                         >
                           <MoreVertical size={18} />
                         </button>
-                        {activeDropdown === client.id && (
+                        {activeDropdown === product.id && (
                           <div className="absolute right-0 mt-1 w-32 bg-white rounded-md shadow-lg z-20 border border-gray-200 text-left">
                             <ul className="py-1">
                               <li>
                                 <button
-                                  onClick={() => handleOpenModalForEdit(client)}
+                                  onClick={() => handleOpenModalForEdit(product)}
                                   className="w-full cursor-pointer text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                                 >
                                   Edit
@@ -375,7 +359,7 @@ export default function ClientsPage() {
                               </li>
                               <li>
                                 <button
-                                  onClick={() => openDeleteConfirmation(client)}
+                                  onClick={() => openDeleteConfirmation(product)}
                                   className="w-full cursor-pointer text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
                                 >
                                   Delete
@@ -393,19 +377,19 @@ export default function ClientsPage() {
           </div>
         ) : (
           <p className="font-light text-gray-500 mt-6 text-center">
-            No clients found for your account. Add a client to get started.
+            No services found for your account. Add a service to get started.
           </p>
         )}
 
         {/* Delete Confirmation Modal */}
-        {showDeleteConfirmModal && clientToDelete && (
+        {showDeleteConfirmModal && productToDelete && (
           <div className="fixed inset-0 bg-[#000000aa] bg-opacity-75 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg shadow-xl p-6 space-y-4 w-full max-w-md">
               <div className="flex justify-between items-center">
                 <h3 className="text-lg font-semibold text-gray-800">Confirm Deletion</h3>
               </div>
               <p className="text-sm text-gray-600">
-                Are you sure you want to delete the client: <strong>{clientToDelete.name}</strong>?
+                Are you sure you want to delete the service: <strong>{productToDelete.name}</strong>?
               </p>
               <p className="text-sm text-red-500">This action cannot be undone.</p>
               <div className="flex justify-end space-x-3 pt-3">
@@ -416,10 +400,10 @@ export default function ClientsPage() {
                   Cancel
                 </button>
                 <button
-                  onClick={() => handleDeleteClient(clientToDelete.id)}
+                  onClick={() => handleDeleteProduct(productToDelete.id)}
                   className="px-4 cursor-pointer py-2 text-sm font-medium rounded-md bg-red-600 text-white hover:bg-red-700"
                 >
-                  Delete Client
+                  Delete Service
                 </button>
               </div>
             </div>

@@ -39,13 +39,13 @@ export default function Sidebar() {
         </Link>
 
         <Link
-          href="/products"
+          href="/services"
           className={`flex font-semibold text-sm gap-1 px-3 py-2 items-center rounded-lg hover:bg-gray-100 ${
-            pathname === "/products" ? "bg-gray-100 text-blue-500" : ""
+            pathname === "/services" ? "bg-gray-100 text-blue-500" : ""
           }`}
         >
           <Package className="h-4" />
-          Products
+          Services
         </Link>
 
         <Link
