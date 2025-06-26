@@ -266,7 +266,7 @@ export default function ProductsPage() { // Renamed to follow PascalCase convent
                     onChange={(e) => setProductPrice(e.target.value)}
                     className="p-2 rounded-lg h-10 bg-blue-50 text-sm w-full"
                     min="0"
-                    step="100"
+                    step="0.01"
                   />
                 </div>
                 <div>
