@@ -561,7 +561,7 @@ export default function InvoicesPage() {
         return;
       }
 
-      let newCount = 29;
+      let newCount = 32;
       if (lastInvoice && lastInvoice.invoice_number) {
         const parts = lastInvoice.invoice_number.split("-");
         const lastYear = parts[1];
