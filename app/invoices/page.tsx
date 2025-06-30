@@ -157,7 +157,13 @@ const InvoicePdf = ({ invoice }: { invoice: any }) => {
                 FACTURE POUR
               </Text>
               <Text
-                style={{ fontSize: 20, fontWeight: "bold", marginBottom: 10 }}
+                style={{
+                  fontSize: 20,
+                  fontWeight: "bold",
+                  marginBottom: 10,
+                  maxWidth: 300,
+                  lineHeight: 1.2,
+                }}
               >
                 {invoice.client.name}
               </Text>
@@ -525,7 +531,7 @@ export default function InvoicesPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-  await supabase.auth.getSession(); 
+    await supabase.auth.getSession();
 
     if (!selectedBusiness || !selectedClient || selectedProducts.length === 0) {
       alert("Please select a business, client, and at least one service.");
@@ -538,20 +544,37 @@ export default function InvoicesPage() {
     if (editingInvoice && editingInvoice.invoice_number) {
       finalInvoiceNumber = editingInvoice.invoice_number;
     } else {
-      const { count, error: countError } = await supabase
-        .from("invoice")
-        .select("*", { count: "exact", head: true })
-        .eq("business_id", selectedBusiness);
+      const currentYear = new Date().getFullYear().toString().slice(-2);
 
-      if (countError) {
-        console.error("Error fetching invoice count:", countError.message);
+      // Get the last invoice for this business to determine the next sequential number
+      const { data: lastInvoice, error: lastInvoiceError } = await supabase
+        .from("invoice")
+        .select("invoice_number")
+        .eq("business_id", selectedBusiness)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+
+      if (lastInvoiceError && lastInvoiceError.code !== "PGRST116") {
+        console.error("Error fetching last invoice:", lastInvoiceError.message);
         alert("Could not generate a new invoice number. Please try again.");
         return;
       }
-      const newCount = (count ?? 0) + 28;
+
+      let newCount = 29;
+      if (lastInvoice && lastInvoice.invoice_number) {
+        const parts = lastInvoice.invoice_number.split("-");
+        const lastYear = parts[1];
+
+        if (lastYear === currentYear) {
+          // Same year, increment the count
+          newCount = parseInt(parts[0], 10) + 1;
+        }
+        // If different year, newCount stays 1 (reset for new year)
+      }
+
       const paddedCount = String(newCount).padStart(2, "0");
-      const currentYear = new Date().getFullYear().toString().slice(-2);
-      finalInvoiceNumber = `${currentYear}-${paddedCount}`;
+      finalInvoiceNumber = `${paddedCount}-${currentYear}`;
     }
 
     // --- Recalculate totals (No changes here) ---
@@ -619,8 +642,8 @@ export default function InvoicesPage() {
     const blob = await pdf(<InvoicePdf invoice={fullInvoiceForPdf} />).toBlob();
 
     // 3. Define a unique file path for the upload.
-   const uniqueSuffix = Date.now(); // Gets a unique number like 1678886400000
-const filePath = `${selectedBusiness}/${finalInvoiceNumber}-${uniqueSuffix}.pdf`;
+    const uniqueSuffix = Date.now(); // Gets a unique number like 1678886400000
+    const filePath = `${selectedBusiness}/${finalInvoiceNumber}-${uniqueSuffix}.pdf`;
 
     // 4. Upload the PDF to Supabase Storage.
     const { data: uploadData, error: uploadError } = await supabase.storage
@@ -1194,7 +1217,8 @@ const filePath = `${selectedBusiness}/${finalInvoiceNumber}-${uniqueSuffix}.pdf`
                             title="View PDF"
                             className="flex items-center gap-1 rounded hover:underline text-blue-600"
                           >
-                            <FileText size={18} />{invoice.invoice_number}
+                            <FileText size={18} />
+                            {invoice.invoice_number}
                           </a>
                         )}
                       </td>
